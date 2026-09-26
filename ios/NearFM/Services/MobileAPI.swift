@@ -31,6 +31,7 @@ struct MobileSession: Codable {
     let userID: String
     var kind: String? = nil
     var isLocalWallet: Bool { kind == "verified-local-wallet" }
+    var isCloudWallet: Bool { kind == "verified-cloud-wallet" }
     enum CodingKeys: String, CodingKey { case accessToken = "access_token", userID = "user_id", kind }
 }
 
@@ -52,7 +53,16 @@ enum MobileAPIError: LocalizedError {
 struct MobileAPI {
     let baseURL: URL?
     var accessToken: String?
-    private let session: URLSession = .shared
+    private static let isolatedSession: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.httpCookieStorage = nil
+        configuration.httpShouldSetCookies = false
+        configuration.urlCredentialStorage = nil
+        configuration.timeoutIntervalForRequest = 20
+        configuration.timeoutIntervalForResource = 30
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return URLSession(configuration: configuration, delegate: MobileAPIRedirectDelegate(), delegateQueue: nil)
+    }()
 
     init(baseURL: URL?, accessToken: String? = nil) {
         self.baseURL = baseURL
@@ -67,7 +77,9 @@ struct MobileAPI {
 
     private func endpoint(_ path: String, query: [URLQueryItem] = []) throws -> URL {
         guard let baseURL else { throw MobileAPIError.unconfigured }
-        guard baseURL.scheme == "https" || Self.debugLocalhost(baseURL) else { throw MobileAPIError.insecureURL }
+        guard (baseURL.scheme == "https" || Self.debugLocalhost(baseURL)),
+              baseURL.host != nil, baseURL.user == nil, baseURL.password == nil,
+              baseURL.query == nil, baseURL.fragment == nil else { throw MobileAPIError.insecureURL }
         guard var components = URLComponents(url: baseURL.appending(path: "api/mobile/v1/\(path)"), resolvingAgainstBaseURL: false) else {
             throw MobileAPIError.unconfigured
         }
@@ -88,12 +100,13 @@ struct MobileAPI {
         var request = URLRequest(url: try endpoint(path, query: query))
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let accessToken { request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization") }
+        request.httpShouldHandleCookies = false
+        if let accessToken, !accessToken.isEmpty { request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization") }
         if let body {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONEncoder().encode(AnyEncodable(body))
         }
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await Self.isolatedSession.data(for: request)
         guard let response = response as? HTTPURLResponse else { throw MobileAPIError.invalidResponse }
         if response.statusCode == 401 { throw MobileAPIError.unauthorized }
         if response.statusCode == 409 { throw MobileAPIError.conflict }
@@ -137,6 +150,18 @@ struct MobileAPI {
         struct Body: Encodable { let code_challenge: String }
         return try await request("auth/meteor/challenge", method: "POST", body: Body(code_challenge: codeChallenge))
     }
+    func meteorVerify(challengeID: String, accountID: String, publicKey: String, signature: String, verifier: String) async throws -> MobileSession {
+        struct Body: Encodable {
+            let challenge_id: String
+            let account_id: String
+            let public_key: String
+            let signature: String
+            let code_verifier: String
+        }
+        return try await request("auth/meteor/verify", method: "POST",
+                                 body: Body(challenge_id: challengeID, account_id: accountID,
+                                            public_key: publicKey, signature: signature, code_verifier: verifier))
+    }
     func exchange(code: String, verifier: String) async throws -> MobileSession {
         struct Body: Encodable { let code: String; let code_verifier: String }
         return try await request("auth/exchange", method: "POST", body: Body(code: code, code_verifier: verifier))
@@ -163,8 +188,32 @@ struct MeteorChallenge: Decodable {
         nonce = try box.decode([UInt8].self, forKey: .nonce)
         recipient = try box.decode(String.self, forKey: .recipient)
         let raw = try box.decode(String.self, forKey: .expiresAt)
-        guard let date = ISO8601DateFormatter().date(from: raw) else { throw MobileAPIError.invalidResponse }
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = fractional.date(from: raw) ?? ISO8601DateFormatter().date(from: raw) else { throw MobileAPIError.invalidResponse }
         expiresAt = date
+    }
+}
+
+extension MobileAPI: LibraryRemote {
+    func fetchLibrary() async throws -> LibrarySnapshot {
+        do { return try await library() }
+        catch MobileAPIError.unauthorized { throw LibrarySyncError.unauthorized }
+        catch MobileAPIError.conflict { throw LibrarySyncError.conflict }
+    }
+
+    func putLibrary(_ snapshot: LibrarySnapshot) async throws -> LibrarySnapshot {
+        do { return try await saveLibrary(snapshot) }
+        catch MobileAPIError.unauthorized { throw LibrarySyncError.unauthorized }
+        catch MobileAPIError.conflict { throw LibrarySyncError.conflict }
+    }
+}
+
+private final class MobileAPIRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
+                    completionHandler: @escaping (URLRequest?) -> Void) {
+        completionHandler(nil)
     }
 }
 
