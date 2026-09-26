@@ -39,7 +39,7 @@ for path in sorted((ROOT / 'NearFM').rglob('*')):
 asset = obj('assets', '{isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = NearFM/Resources/Assets.xcassets; sourceTree = "<group>"; }')
 refs.append(asset)
 resources.append(obj('assets-build', f'{{isa = PBXBuildFile; fileRef = {asset}; }}'))
-product = obj('product', '{isa = PBXFileReference; explicitFileType = wrapper.application; path = NearFM.app; sourceTree = BUILT_PRODUCTS_DIR; }')
+product = obj('product', '{isa = PBXFileReference; explicitFileType = wrapper.application; path = DachaFM.app; sourceTree = BUILT_PRODUCTS_DIR; }')
 product_group = obj('products', f'{{isa = PBXGroup; children = {array([product])}; name = Products; sourceTree = "<group>"; }}')
 main_group = obj('main-group', f'{{isa = PBXGroup; children = {array(refs + [product_group])}; sourceTree = "<group>"; }}')
 package = obj('package', '{isa = XCLocalSwiftPackageReference; relativePath = Packages/NearFMCore; }')
@@ -65,7 +65,7 @@ for configuration in ('Debug', 'Release'):
     }) + '; }'))
     config_ref = obj('config-' + configuration, '{isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/' + configuration + '.xcconfig; sourceTree = "<group>"; }')
     target_configs.append(obj('target-' + configuration, '{isa = XCBuildConfiguration; name = ' + configuration + '; baseConfigurationReference = ' + config_ref + '; buildSettings = ' + settings({
-        'PRODUCT_NAME': 'NearFM', 'PRODUCT_BUNDLE_IDENTIFIER': 'com.whendacha.nearfm',
+        'PRODUCT_NAME': 'DachaFM', 'PRODUCT_BUNDLE_IDENTIFIER': 'com.whendacha.dachafm',
         'INFOPLIST_FILE': 'NearFM/Info.plist', 'GENERATE_INFOPLIST_FILE': 'NO',
         'CODE_SIGN_ENTITLEMENTS': 'NearFM/NearFM.entitlements', 'CODE_SIGN_STYLE': 'Automatic',
         'CURRENT_PROJECT_VERSION': '1', 'MARKETING_VERSION': '1.0.0',
@@ -77,7 +77,7 @@ for configuration in ('Debug', 'Release'):
     }) + '; }'))
 project_config_list = obj('project-configs', f'{{isa = XCConfigurationList; buildConfigurations = {array(project_configs)}; defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; }}')
 target_config_list = obj('target-configs', f'{{isa = XCConfigurationList; buildConfigurations = {array(target_configs)}; defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; }}')
-target = obj('target', f'{{isa = PBXNativeTarget; buildConfigurationList = {target_config_list}; buildPhases = {array([source_phase, framework_phase, resource_phase])}; buildRules = (); dependencies = (); name = NearFM; packageProductDependencies = {array([package_product])}; productName = NearFM; productReference = {product}; productType = "com.apple.product-type.application"; }}')
+target = obj('target', f'{{isa = PBXNativeTarget; buildConfigurationList = {target_config_list}; buildPhases = {array([source_phase, framework_phase, resource_phase])}; buildRules = (); dependencies = (); name = NearFM; packageProductDependencies = {array([package_product])}; productName = DachaFM; productReference = {product}; productType = "com.apple.product-type.application"; }}')
 test_file = obj('uitest-file', '{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearFMUITests/ListenerUITests.swift; sourceTree = "<group>"; }')
 test_build = obj('uitest-build', f'{{isa = PBXBuildFile; fileRef = {test_file}; }}')
 test_sources = obj('uitest-sources', f'{{isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = {array([test_build])}; runOnlyForDeploymentPostprocessing = 0; }}')
@@ -85,7 +85,7 @@ test_product = obj('uitest-product', '{isa = PBXFileReference; explicitFileType 
 test_configs = []
 for configuration in ('Debug', 'Release'):
     test_configs.append(obj('uitest-' + configuration, '{isa = XCBuildConfiguration; name = ' + configuration + '; buildSettings = ' + settings({
-        'PRODUCT_NAME': 'NearFMUITests', 'PRODUCT_BUNDLE_IDENTIFIER': 'com.whendacha.nearfm.uitests',
+        'PRODUCT_NAME': 'NearFMUITests', 'PRODUCT_BUNDLE_IDENTIFIER': 'com.whendacha.dachafm.uitests',
         'GENERATE_INFOPLIST_FILE': 'YES', 'TEST_TARGET_NAME': 'NearFM', 'SWIFT_VERSION': '5.0',
         'IPHONEOS_DEPLOYMENT_TARGET': '17.0', 'TARGETED_DEVICE_FAMILY': '1', 'CODE_SIGN_STYLE': 'Automatic',
         'LD_RUNPATH_SEARCH_PATHS': '$(inherited) @executable_path/Frameworks @loader_path/Frameworks',
@@ -101,7 +101,7 @@ directory.mkdir(exist_ok=True)
 (directory / 'project.pbxproj').write_text('// !$*UTF8*$!\n{archiveVersion = 1; classes = {}; objectVersion = 56; objects = {\n' + '\n'.join(f'{key} = {value};' for key, value in objects.items()) + f'\n}}; rootObject = {project}; }}\n')
 schemes = directory / 'xcshareddata' / 'xcschemes'
 schemes.mkdir(parents=True, exist_ok=True)
-reference = f'<BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{target}" BuildableName="NearFM.app" BlueprintName="NearFM" ReferencedContainer="container:NearFM.xcodeproj"/>'
+reference = f'<BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{target}" BuildableName="DachaFM.app" BlueprintName="NearFM" ReferencedContainer="container:NearFM.xcodeproj"/>'
 (schemes / 'NearFM.xcscheme').write_text(f'''<?xml version="1.0" encoding="UTF-8"?>
 <Scheme LastUpgradeVersion="2600" version="1.3">
  <BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES"><BuildActionEntries><BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">{reference}</BuildActionEntry></BuildActionEntries></BuildAction>
