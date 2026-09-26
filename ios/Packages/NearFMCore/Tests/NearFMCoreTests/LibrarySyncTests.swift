@@ -182,6 +182,88 @@ final class LibrarySyncTests: XCTestCase {
         XCTAssertTrue(first.snapshot.favorites.isEmpty)
         XCTAssertEqual(second.snapshot.favorites.map(\.id), ["private-b"])
     }
+    func testHideAndUnhideSyncBetweenTwoDevicesWithPreservedMemberships() async throws {
+        let song = track("a")
+        let base = LibrarySnapshot(version: 1, favorites: [song], playlists: [Playlist(id: "p", name: "Saved", tracks: [song])], blockedArtistIDs: [])
+        let first = try store(base), second = try store(base)
+        let remote = MemoryRemote(snapshot: base)
+        let firstSync = LibrarySynchronizer(store: first, remote: remote)
+        let secondSync = LibrarySynchronizer(store: second, remote: remote)
+        try first.hideTrack(song)
+        await firstSync.synchronize()
+        await secondSync.synchronize()
+        XCTAssertEqual(second.snapshot.hiddenTracks, [song])
+        XCTAssertEqual(second.snapshot.favorites, [song])
+        XCTAssertEqual(second.snapshot.playlists[0].tracks, [song])
+        try second.unhideTrack(song.id)
+        await secondSync.synchronize()
+        await firstSync.synchronize()
+        XCTAssertTrue(first.snapshot.hiddenTracks.isEmpty)
+        XCTAssertEqual(first.snapshot.favorites, [song])
+        XCTAssertEqual(first.snapshot.playlists[0].tracks, [song])
+        XCTAssertEqual(first.snapshot.version, 3)
+    }
+
+    func testDifferentHiddenSongsCauseConflictInsteadOfLostAcknowledgement() async throws {
+        let first = try store(), second = try store()
+        let a = track("a"), b = track("b")
+        try first.hideTrack(a)
+        try second.hideTrack(b)
+        let remote = MemoryRemote()
+        await LibrarySynchronizer(store: second, remote: remote).synchronize()
+        let sync = LibrarySynchronizer(store: first, remote: remote)
+        await sync.synchronize()
+        XCTAssertEqual(sync.state, .conflict)
+        XCTAssertEqual(first.snapshot.hiddenTracks, [a])
+        XCTAssertEqual(sync.remoteConflict?.hiddenTracks, [b])
+        try await sync.useDevice()
+        XCTAssertEqual(sync.state, .synced)
+        XCTAssertEqual(remote.snapshot.hiddenTracks, [a])
+    }
+
+    func testLostHideAcknowledgementRecognizesSameUnorderedHiddenContent() async throws {
+        let local = try store()
+        let a = track("a"), b = track("b")
+        try local.hideTrack(a)
+        try local.hideTrack(b)
+        let remote = MemoryRemote()
+        remote.loseNextPutResponse = true
+        let sync = LibrarySynchronizer(store: local, remote: remote)
+        await sync.synchronize()
+        XCTAssertEqual(sync.state, .offline)
+        remote.snapshot.hiddenTracks.reverse()
+        await sync.synchronize()
+        XCTAssertEqual(sync.state, .synced)
+        XCTAssertEqual(Set(local.snapshot.hiddenTracks.map(\.id)), Set(["a", "b"]))
+        XCTAssertFalse(local.hasPendingChanges)
+        XCTAssertEqual(remote.putCalls, 1)
+    }
+
+    func testHiddenMetadataDifferenceDoesNotMasqueradeAsAcknowledgement() async throws {
+        let a = track("a")
+        let changed = Track(id: a.id, title: "Changed", artistID: a.artistID, artistName: a.artistName, audioURL: a.audioURL, artworkURL: nil, duration: a.duration)
+        let local = try store()
+        try local.hideTrack(a)
+        let remote = MemoryRemote(snapshot: LibrarySnapshot(version: 1, favorites: [], playlists: [], blockedArtistIDs: [], hiddenTracks: [changed]))
+        let sync = LibrarySynchronizer(store: local, remote: remote)
+        await sync.synchronize()
+        XCTAssertEqual(sync.state, .conflict)
+        XCTAssertEqual(local.snapshot.hiddenTracks, [a])
+    }
+
+    func testLegacyCloudResponseDecodesThenAcceptsFirstHide() async throws {
+        let legacy = try JSONDecoder().decode(LibrarySnapshot.self, from: Data(#"{"version":4,"favorites":[],"playlists":[],"blocked_artist_ids":[]}"#.utf8))
+        let local = try store(legacy)
+        let remote = MemoryRemote(snapshot: legacy)
+        let sync = LibrarySynchronizer(store: local, remote: remote)
+        await sync.synchronize()
+        XCTAssertTrue(local.snapshot.hiddenTracks.isEmpty)
+        try local.hideTrack(track("new"))
+        await sync.synchronize()
+        XCTAssertEqual(remote.snapshot.version, 5)
+        XCTAssertEqual(remote.snapshot.hiddenTracks.map(\.id), ["new"])
+    }
+
 }
 
 private extension LibrarySnapshot {

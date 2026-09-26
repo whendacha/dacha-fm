@@ -70,4 +70,46 @@ final class PlaybackQueueTests: XCTestCase {
         XCTAssertTrue(queue.next(repeatAll: true))
         XCTAssertEqual(queue.current?.id, "a1")
     }
+    func testRemovePrecedingTrackKeepsCurrentAndScope() {
+        var queue = PlaybackQueue()
+        queue.replace(with: [track("a"), track("b"), track("c")], artistID: "a", startID: "b")
+        queue.removeTrack("a")
+        XCTAssertEqual(queue.tracks.map(\.id), ["b", "c"])
+        XCTAssertEqual(queue.current?.id, "b")
+        XCTAssertEqual(queue.index, 0)
+        XCTAssertEqual(queue.artistID, "a")
+        queue.removeTrack("missing")
+        XCTAssertEqual(queue.current?.id, "b")
+    }
+
+    func testRemoveCurrentAndPrecedingChoosesNextOriginalSurvivor() {
+        var queue = PlaybackQueue()
+        queue.replace(with: [track("a"), track("b"), track("c"), track("d"), track("e")], artistID: "a", startID: "c")
+        queue.removeTracks(Set(["a", "c", "d"]))
+        XCTAssertEqual(queue.tracks.map(\.id), ["b", "e"])
+        XCTAssertEqual(queue.current?.id, "e", "Removing earlier rows must not move playback backwards")
+        XCTAssertEqual(queue.index, 1)
+        XCTAssertEqual(queue.artistID, "a")
+    }
+
+    func testRemoveTailFallsBackToLastSurvivingPreviousTrack() {
+        var queue = PlaybackQueue()
+        queue.replace(with: [track("a"), track("b"), track("c")], startID: "c")
+        queue.removeTracks(Set(["b", "c"]))
+        XCTAssertEqual(queue.current?.id, "a")
+        XCTAssertEqual(queue.index, 0)
+    }
+
+    func testRemoveAllTracksClearsCurrentAndArtistScope() {
+        var queue = PlaybackQueue()
+        queue.replace(with: [track("a"), track("b")], artistID: "a", startID: "b")
+        queue.removeTracks(Set(["a", "b"]))
+        XCTAssertTrue(queue.tracks.isEmpty)
+        XCTAssertNil(queue.current)
+        XCTAssertNil(queue.artistID)
+        XCTAssertEqual(queue.index, 0)
+        queue.removeTrack("anything")
+        XCTAssertNil(queue.current)
+    }
+
 }

@@ -17,4 +17,25 @@ final class WireFormatTests: XCTestCase {
         XCTAssertEqual(favorites[0]["artist_id"] as? String, "artist-slug")
         XCTAssertEqual(favorites[0]["audio_url"] as? String, "https://example.org/audio.mp3")
     }
+    func testLegacyLibraryDecodesAndEmitsEmptyHiddenTracks() throws {
+        let legacy = Data(#"{"version":4,"favorites":[],"playlists":[],"blocked_artist_ids":[]}"#.utf8)
+        let snapshot = try JSONDecoder().decode(LibrarySnapshot.self, from: legacy)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(snapshot)) as? [String: Any])
+        XCTAssertEqual(snapshot.version, 4)
+        XCTAssertNotNil(object["hidden_tracks"] as? [[String: Any]], "Legacy libraries must upgrade to an explicit empty hidden-track list")
+        XCTAssertEqual((object["hidden_tracks"] as? [[String: Any]])?.count, 0)
+        XCTAssertNil(object["hiddenTracks"])
+    }
+
+    func testHiddenTrackWireMetadataSurvivesRoundTrip() throws {
+        let data = Data(#"{"version":5,"favorites":[],"playlists":[],"blocked_artist_ids":[],"hidden_tracks":[{"id":"hidden-song","title":"Hidden song","artist_id":"author","artist_name":"Artist","audio_url":"https://example.org/hidden.mp3","artwork_url":null,"duration":180}]}"#.utf8)
+        let snapshot = try JSONDecoder().decode(LibrarySnapshot.self, from: data)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(snapshot)) as? [String: Any])
+        let hidden = try XCTUnwrap(object["hidden_tracks"] as? [[String: Any]])
+        XCTAssertEqual(hidden.count, 1)
+        XCTAssertEqual(hidden[0]["id"] as? String, "hidden-song")
+        XCTAssertEqual(hidden[0]["title"] as? String, "Hidden song")
+        XCTAssertEqual(hidden[0]["audio_url"] as? String, "https://example.org/hidden.mp3")
+    }
+
 }
