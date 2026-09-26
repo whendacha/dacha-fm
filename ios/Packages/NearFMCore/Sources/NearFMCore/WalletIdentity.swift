@@ -13,21 +13,28 @@ public enum WalletIdentityError: Error, LocalizedError {
     }
 }
 
-/// An in-memory, single-attempt challenge for a local wallet identity.
-/// It does not create a service account, bearer token or cloud session.
+/// An in-memory, single-attempt challenge with a fixed, explicit sign-in scope.
+/// A proof alone does not create a service account or bearer token.
 public struct WalletIdentityChallenge {
+    public enum Scope { case local, cloud }
     public static let message = "Dacha FM sign-in\nVerify your Meteor account for the library on this device. No transaction or wallet permission is requested."
+    public static let cloudMessage = "Dacha FM cloud sign-in\nSign in to sync your favorites and playlists across your devices. No transaction or wallet permission is requested."
     public let nonce: Data
     public let state: String
     public let recipient: String
     public let issuedAt: Date
+    public let expiresAt: Date
+    public let scope: Scope
+    public var signingMessage: String { scope == .cloud ? Self.cloudMessage : Self.message }
     private let bridgeURL: URL
 
-    public init(bridgeURL: URL, nonce: Data, state: String, issuedAt: Date = Date()) throws {
+    public init(bridgeURL: URL, nonce: Data, state: String, issuedAt: Date = Date(), scope: Scope = .local, expiresAt: Date? = nil) throws {
+        let expiry = expiresAt ?? issuedAt.addingTimeInterval(300)
         guard bridgeURL.scheme == "https", let host = bridgeURL.host, !host.isEmpty,
               bridgeURL.user == nil, bridgeURL.password == nil, bridgeURL.port == nil,
               bridgeURL.query == nil, bridgeURL.fragment == nil,
-              host.count <= 253, nonce.count == 32, Self.canonicalRandomString(state) else {
+              host.count <= 253, nonce.count == 32, Self.canonicalRandomString(state),
+              expiry > issuedAt, expiry <= issuedAt.addingTimeInterval(300) else {
             throw WalletIdentityError.invalidChallenge
         }
         self.bridgeURL = bridgeURL
@@ -35,6 +42,8 @@ public struct WalletIdentityChallenge {
         self.state = state
         self.recipient = host
         self.issuedAt = issuedAt
+        self.expiresAt = expiry
+        self.scope = scope
     }
 
     public func authorizationURL() throws -> URL {
@@ -43,7 +52,7 @@ public struct WalletIdentityChallenge {
         }
         components.queryItems = [
             .init(name: "mode", value: "identity"), .init(name: "state", value: state),
-            .init(name: "nonce", value: Self.base64URL(nonce)), .init(name: "message", value: Self.message),
+            .init(name: "nonce", value: Self.base64URL(nonce)), .init(name: "message", value: signingMessage),
             .init(name: "recipient", value: recipient),
         ]
         guard let url = components.url else { throw WalletIdentityError.invalidChallenge }
@@ -51,8 +60,7 @@ public struct WalletIdentityChallenge {
     }
 
     public func verify(callbackURL: URL, now: Date = Date()) throws -> WalletIdentityProof {
-        let age = now.timeIntervalSince(issuedAt)
-        guard (0...300).contains(age) else { throw WalletIdentityError.expired }
+        guard now >= issuedAt, now <= expiresAt else { throw WalletIdentityError.expired }
         guard callbackURL.absoluteString.utf8.count <= 2048,
               let callback = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false),
               callback.scheme == "dachafm", callback.host == "auth", callback.path == "/callback",
@@ -76,7 +84,7 @@ public struct WalletIdentityChallenge {
               signature.base64EncodedString() == signatureString else { throw WalletIdentityError.invalidCallback }
         let key = try Curve25519.Signing.PublicKey(rawRepresentation: keyBytes)
         guard key.isValidSignature(signature, for: signatureDigest()) else { throw WalletIdentityError.invalidSignature }
-        return WalletIdentityProof(accountID: account, publicKey: publicKey)
+        return WalletIdentityProof(accountID: account, publicKey: publicKey, signature: signatureString)
     }
 
     private func signatureDigest() -> Data {
@@ -90,7 +98,7 @@ public struct WalletIdentityChallenge {
             bytes.append(data)
         }
         appendU32(2_147_484_061) // 2^31 + NEP-413; this payload cannot be a transaction.
-        appendString(Self.message)
+        appendString(signingMessage)
         bytes.append(nonce) // Fixed [u8; 32], without a Borsh length prefix.
         appendString(recipient)
         bytes.append(0) // Optional callback URL is absent in the Meteor signMessage call.
@@ -131,6 +139,7 @@ public struct WalletIdentityChallenge {
 public struct WalletIdentityProof {
     public let accountID: String
     public let publicKey: String
+    public let signature: String
 
     public static func validateAccessKeyResponse(_ data: Data) throws {
         guard data.count <= 128 * 1024,

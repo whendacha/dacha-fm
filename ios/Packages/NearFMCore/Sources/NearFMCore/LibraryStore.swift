@@ -10,13 +10,32 @@ public enum LibraryStoreError: Error, Equatable {
 @MainActor
 public final class LibraryStore {
     public private(set) var snapshot: LibrarySnapshot
+    public private(set) var hasPendingChanges = false
+    public private(set) var revision: UInt64 = 0
+    public private(set) var cloudInitialized = false
     private let fileURL: URL
+
+    private struct Persisted: Codable {
+        let format: Int
+        let snapshot: LibrarySnapshot
+        let pending: Bool
+        let revision: UInt64
+        let cloudInitialized: Bool
+    }
 
     public init(fileURL: URL) throws {
         self.fileURL = fileURL
         if FileManager.default.fileExists(atPath: fileURL.path) {
             // A corrupt or unreadable file is an error. Never replace it with an empty library.
-            snapshot = try JSONDecoder().decode(LibrarySnapshot.self, from: Data(contentsOf: fileURL))
+            let data = try Data(contentsOf: fileURL)
+            if let saved = try? JSONDecoder().decode(Persisted.self, from: data), saved.format == 1 {
+                snapshot = saved.snapshot
+                hasPendingChanges = saved.pending
+                revision = saved.revision
+                cloudInitialized = saved.cloudInitialized
+            } else {
+                snapshot = try JSONDecoder().decode(LibrarySnapshot.self, from: data)
+            }
         } else {
             snapshot = LibrarySnapshot(version: 0, favorites: [], playlists: [], blockedArtistIDs: [])
         }
@@ -100,8 +119,32 @@ public final class LibraryStore {
     public func replace(_ replacement: LibrarySnapshot) throws {
         var normalized = try Self.normalized(replacement)
         normalized.version = replacement.version
-        try persist(normalized)
-        snapshot = normalized
+        try commit(normalized, pending: false)
+    }
+
+    /// Upgrades a build 2 wallet library without treating it as an empty cloud copy.
+    /// Guest stores never call this method and are uploaded only by explicit merge.
+    public func enableCloudSync(legacyPending: Bool = false) throws {
+        guard !cloudInitialized || legacyPending else { return }
+        let hasContent = !snapshot.favorites.isEmpty || !snapshot.playlists.isEmpty || !snapshot.blockedArtistIDs.isEmpty
+        try commit(snapshot, pending: hasPendingChanges || legacyPending || (!cloudInitialized && hasContent), cloud: true)
+    }
+
+    public func acknowledge(_ saved: LibrarySnapshot, sentRevision: UInt64) throws {
+        if revision == sentRevision {
+            try replace(saved)
+        } else {
+            var latest = snapshot
+            latest.version = saved.version
+            try commit(latest, pending: true)
+        }
+    }
+
+    /// Explicitly chooses the device's complete content, including removals and order.
+    public func rebaseLocal(on version: Int) throws {
+        var local = snapshot
+        local.version = version
+        try commit(local, pending: true)
     }
 
     public func mergeGuest(_ guest: LibrarySnapshot) throws {
@@ -133,14 +176,20 @@ public final class LibraryStore {
         var updated = snapshot
         try body(&updated)
         guard updated != snapshot else { return }
-        try persist(updated)
-        snapshot = updated
+        try commit(updated, pending: true)
     }
 
-    private func persist(_ value: LibrarySnapshot) throws {
+    private func commit(_ value: LibrarySnapshot, pending: Bool, cloud: Bool? = nil) throws {
         try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let data = try JSONEncoder().encode(value)
+        let nextRevision = revision &+ 1
+        let nextCloud = cloud ?? cloudInitialized
+        let data = try JSONEncoder().encode(Persisted(format: 1, snapshot: value, pending: pending,
+                                                     revision: nextRevision, cloudInitialized: nextCloud))
         try data.write(to: fileURL, options: .atomic)
+        snapshot = value
+        hasPendingChanges = pending
+        revision = nextRevision
+        cloudInitialized = nextCloud
     }
 
     private static func validName(_ name: String) throws -> String {
