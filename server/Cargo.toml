@@ -46,3 +46,6 @@ dotenvy = "0.15"
 base64 = "0.21"
 governor = "0.6"
 urlencoding = "2"
+
+# Encryption of revocable Apple provider tokens at rest
+aes-gcm = "0.10"
