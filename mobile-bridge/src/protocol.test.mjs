@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { IDENTITY_MESSAGE, parseInput, nonceBytes, callbackURL, attemptGate } from "./protocol.mjs";
+import { IDENTITY_MESSAGE, CLOUD_IDENTITY_MESSAGE, scopePresentation, parseInput, nonceBytes, callbackURL, attemptGate } from "./protocol.mjs";
 
 const state = "A".repeat(43);
 const nonce = "B".repeat(42) + "A";
@@ -10,6 +10,19 @@ const parameters = () => new URLSearchParams({ mode: "identity", state, nonce, m
 test("accepts exact Dacha identity request with a canonical 32-byte nonce", () => {
   assert.deepEqual(parseInput(parameters(), location), { state, nonce, message: IDENTITY_MESSAGE, recipient: location.hostname });
   assert.equal(nonceBytes(nonce).length, 32);
+});
+
+test("accepts the fixed cloud statement while preserving build 2 local requests", () => {
+  const cloud = parameters(); cloud.set("message", CLOUD_IDENTITY_MESSAGE);
+  assert.equal(parseInput(cloud, location)?.message, CLOUD_IDENTITY_MESSAGE);
+  assert.equal(parseInput(parameters(), location)?.message, IDENTITY_MESSAGE);
+  assert.match(scopePresentation(CLOUD_IDENTITY_MESSAGE).intro, /sync.*across your devices/i);
+  assert.match(scopePresentation(IDENTITY_MESSAGE).intro, /on this device/i);
+  assert.equal(scopePresentation("made up scope"), null);
+  for (const altered of [CLOUD_IDENTITY_MESSAGE + " extra", CLOUD_IDENTITY_MESSAGE.replace("cloud", "local"), IDENTITY_MESSAGE + "\n" + CLOUD_IDENTITY_MESSAGE]) {
+    const invalid = parameters(); invalid.set("message", altered);
+    assert.equal(parseInput(invalid, location), null);
+  }
 });
 
 test("rejects duplicate, missing, unknown and noncanonical inputs", () => {

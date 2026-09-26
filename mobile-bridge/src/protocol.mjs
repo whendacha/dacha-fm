@@ -1,4 +1,5 @@
 export const IDENTITY_MESSAGE = "Dacha FM sign-in\nVerify your Meteor account for the library on this device. No transaction or wallet permission is requested.";
+export const CLOUD_IDENTITY_MESSAGE = "Dacha FM cloud sign-in\nSign in to sync your favorites and playlists across your devices. No transaction or wallet permission is requested.";
 export const CALLBACK = "dachafm://auth/callback";
 const tokenPattern = /^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/;
 const accountPattern = /^(([a-z0-9]+[-_])*[a-z0-9]+\.)*([a-z0-9]+[-_])*[a-z0-9]+$/;
@@ -10,7 +11,19 @@ export function isToken(value) {
   return typeof value === "string" && tokenPattern.test(value);
 }
 
-// This page signs only the one fixed identity statement understood by the app.
+export function scopePresentation(message) {
+  if (message === IDENTITY_MESSAGE) return {
+    intro: "Confirm your wallet identity to keep a personal library on this device.",
+    complete: "Identity proof received. Return to Dacha FM to verify your account on this device.",
+  };
+  if (message === CLOUD_IDENTITY_MESSAGE) return {
+    intro: "Sign in to sync your private favorites and playlists across your devices.",
+    complete: "Identity proof received. Return to Dacha FM to finish signing in to your cloud library.",
+  };
+  return null;
+}
+
+// This page signs only the two fixed, explicit identity scopes understood by the app.
 // It is never a general-purpose message signing or redirect endpoint.
 export function parseInput(query, location) {
   const localPreview = ["localhost", "127.0.0.1"].includes(location.hostname);
@@ -22,7 +35,7 @@ export function parseInput(query, location) {
   if (queryKeys.some((key) => query.getAll(key).length !== 1)) return null;
   const values = Object.fromEntries(query);
   if (values.mode !== "identity" || !isToken(values.state) || !isToken(values.nonce)) return null;
-  if (values.message !== IDENTITY_MESSAGE || values.recipient !== location.hostname) return null;
+  if (!scopePresentation(values.message) || values.recipient !== location.hostname) return null;
   // Production links never contain a non-default port. A local preview is the
   // only exception and cannot be used by the production app.
   if (location.port && !localPreview) return null;

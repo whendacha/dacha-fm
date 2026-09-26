@@ -1,7 +1,7 @@
 import { setupWalletSelector } from "@near-wallet-selector/core";
 import { setupMeteorWallet } from "@near-wallet-selector/meteor-wallet";
 import { Buffer } from "buffer";
-import { parseInput, nonceBytes, callbackURL, attemptGate } from "./protocol.mjs";
+import { parseInput, nonceBytes, callbackURL, attemptGate, scopePresentation } from "./protocol.mjs";
 
 const status = document.querySelector("#status");
 const prepareButton = document.querySelector("#prepare");
@@ -10,6 +10,7 @@ const cancelButton = document.querySelector("#cancel");
 const returnLink = document.querySelector("#return");
 const gate = attemptGate();
 const input = parseInput(new URLSearchParams(window.location.search), window.location);
+const presentation = input ? scopePresentation(input.message) : null;
 let wallet = null;
 let token = 0;
 let phase = "ready";
@@ -29,6 +30,7 @@ function update(next, detail) {
 if (!input) {
   update("invalid", "Open sign-in from Dacha FM on your iPhone. This link is missing a valid one-time request.");
 } else {
+  document.querySelector(".intro").textContent = presentation.intro;
   // Remove the challenge from browser history/referrers after parsing it. Its
   // exact values remain only in this page's memory for the current attempt.
   window.history.replaceState(null, "", window.location.pathname);
@@ -75,7 +77,7 @@ signButton.addEventListener("click", async () => {
     if (!callback) throw new Error("Meteor returned an incomplete or invalid identity proof. Return to Dacha FM and try again.");
     returnLink.href = callback;
     returnLink.hidden = false;
-    update("complete", "Identity proof received. Return to Dacha FM to verify your account on this device.");
+    update("complete", presentation.complete);
     window.location.assign(callback);
   } catch (error) {
     if (!gate.current(current)) return;
