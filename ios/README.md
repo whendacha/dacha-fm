@@ -1,10 +1,10 @@
 # Dacha FM for iPhone
 
-Native SwiftUI listener for iOS 17+, developed in the [whendacha fork](https://github.com/whendacha/dacha-fm). Build 3 keeps public streaming, author-only queues, editable playlists, favorites, guest listening, AVPlayer/lock-screen controls and author blocking, and adds optional cloud library synchronization through Meteor Wallet.
+Native SwiftUI listener for iOS 17+, developed in the [whendacha fork](https://github.com/whendacha/dacha-fm). Build 4 provides an English interface and reserves space for the mini-player on every navigation screen so pagination and the last list rows remain reachable. It keeps public streaming, artist-only queues, editable playlists, favorites, guest listening, background audio and optional Meteor-authenticated cloud synchronization.
 
-Apple accepted **1.0.0 (3)** at **10:34:11 MSK (07:34:11 UTC) on 26 September 2026**, completed processing, and the build is available to the existing internal TestFlight group with one invited tester. Russian testing instructions are saved. Its cloud API and database are deployed; 31 core tests, nine live HTTPS checks and three simulator UI tests passed alongside the DB, Edge and bridge suites. See the [build 3 notes](../docs/release/build-3-cloud.md) and [release status](../docs/release/status.md). Actual Meteor approval and the signed return on a physical iPhone remain unverified; no App Review submission or approval is claimed.
+Apple accepted **1.0.0 (4)** at **10:52:26 MSK (07:52:26 UTC) on 26 September 2026**. Processing completed and the build is available to the existing internal TestFlight group. English testing instructions are saved. Fresh validation passed: 31 core tests, five simulator UI tests, seven public HTTPS checks, and signed archive/export checks. The UI tests include catalog/artist pagination and long library lists at the largest accessibility text size, with Russian device language. See [build 4 notes](../docs/release/build-4-ui.md) and [release status](../docs/release/status.md). Physical-device Meteor approval, signed return and two-device synchronization remain acceptance checks; no App Review submission or approval is claimed.
 
-## Default build 3 behavior
+## Default behavior
 
 - Catalog requests go to `https://api.near.fm/api/songs`; audio and artwork load from the HTTPS URLs in the response. No Dacha account token or personal library is sent to the source, and audio is not copied into this repository or offered for offline download.
 - Author queues filter by exact numeric uploader identity. Source pages contain at most 100 songs; each request scans at most three pages and returns the last consumed source page. Author discovery is incremental, not an exhaustive list from the first page. Song search and author-name search are handled separately; an exact author slug can also retrieve a public profile.
@@ -46,7 +46,7 @@ xcodebuild -project ios/NearFM.xcodeproj -scheme NearFM \
   -derivedDataPath ios/DerivedData CODE_SIGNING_ALLOWED=NO test
 ```
 
-Debug supports `--demo` and `--ui-test-store <UUID>` for deterministic local tests. Demo mode is visibly labeled and uses an original synthesized tone; it cannot establish successful login, synchronization, report delivery or real music playback. Normal Release builds use the public catalog when `MOBILE_API_BASE_URL` is empty. Session identity is stored in Keychain, and library files are separated by account and guest.
+Debug supports `--demo` and `--ui-test-store <UUID>` for deterministic local tests. The `--ui-test-layout` flag requires an isolated test-store UUID and supplies paginated songs and long guest-library lists; its fixtures are excluded from Release. Demo mode is visibly labeled and uses an original synthesized tone; it cannot establish successful login, synchronization, report delivery or real music playback. Normal Release builds use the public catalog when `MOBILE_API_BASE_URL` is empty. Session identity is stored in Keychain, and library files are separated by account and guest.
 
 `scripts/generate_project.py` deterministically recreates the project and shared scheme after adding source/resources. `scripts/generate_resources.swift` recreates the original icon/tone. Keep app configuration in xcconfig files so regeneration preserves it.
 
