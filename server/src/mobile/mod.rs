@@ -487,7 +487,7 @@ async fn challenge(
     let id = Uuid::new_v4();
     let mut nonce = [0; 32];
     rand::thread_rng().fill_bytes(&mut nonce);
-    let message=format!("Sign in to {domain} as a NearFM listener. No transaction or wallet permission is requested. Challenge: {id}");
+    let message=format!("Sign in to {domain} as a Dacha FM listener. No transaction or wallet permission is requested. Challenge: {id}");
     let expires = Utc::now() + chrono::Duration::minutes(5);
     sqlx::query("INSERT INTO mobile_challenges VALUES($1,$2,$3,$4,$5,$6)")
         .bind(id)

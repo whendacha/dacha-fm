@@ -75,7 +75,7 @@ fn nep413_binds_recipient_nonce_and_callback() {
     )
     .unwrap());
     let changed = Payload {
-        callback: Some("nearfm://auth/callback".into()),
+        callback: Some("dachafm://auth/callback".into()),
         ..payload
     };
     let sig = key.sign(&Sha256::digest(borsh::to_vec(&changed).unwrap()));
