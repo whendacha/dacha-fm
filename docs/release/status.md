@@ -1,6 +1,6 @@
 # Dacha FM release status — 26 September 2026
 
-Build **1.0.0 (1)** was uploaded, processed and made available to the invited internal TestFlight tester. It had no configured catalog or sign-in service. The user reported that music and authorization did not work. Build **1.0.0 (2)** addresses that configuration failure with direct public streaming and a separate local Meteor identity flow. Its three simulator UI tests and signed archive/export checks have passed. Apple received build 2 at **07:50:32 MSK (04:50:32 UTC) on 26 September 2026** and reported it processing. TestFlight readiness for build 2 has not yet been verified. No App Review submission or approval has occurred.
+Build **1.0.0 (1)** was uploaded, processed and made available to the invited internal TestFlight tester. It had no configured catalog or sign-in service. The user reported that music and authorization did not work. Build **1.0.0 (2)** addresses that configuration failure with direct public streaming and a separate local Meteor identity flow. Its three simulator UI tests and signed archive/export checks have passed. Apple received build 2 at **07:50:32 MSK (04:50:32 UTC) on 26 September 2026** and subsequently completed processing. Build 2 is available to the existing internal TestFlight group and its invited tester; Russian testing instructions are saved. No App Review submission or approval has occurred.
 
 ## Build 2 behavior
 
@@ -22,7 +22,7 @@ Build **1.0.0 (1)** was uploaded, processed and made available to the invited in
 - Bridge protocol checks passed **seven tests, zero failures**. The new catalog adapter and existing MobileAPI also passed a Swift typecheck.
 - The signed Release archive and export for **1.0.0 (2)** passed. IPA ZIP integrity and strict code-signature validation passed. Local artifacts are `ios/build/DachaFM-Build2.xcarchive`, `ios/build/DachaFM-Build2-AppStore/DachaFM.ipa`, and `ios/build/dachafm-build2-evidence.json`; IPA SHA-256 is `d4bb34cb9bc4550b7e4d107f9d1a2f8380772c35fe1c48a96670aed67306db0e`.
 - The wallet UI test stops at the clean-wallet entry screen. Native cryptographic tests use controlled signatures and independent payload construction. Neither establishes actual wallet approval or the signed return on a physical iPhone.
-- The actual build 2 upload log, `ios/build/dachafm-build2-upload.log`, records `Uploaded package is processing.` at 07:50:32.674 MSK, `Upload succeeded.` at **07:50:32.676 MSK**, and `EXPORT SUCCEEDED`. This confirms receipt of **1.0.0 (2)**; TestFlight processing/readiness remains to be verified.
+- The actual build 2 upload log, `ios/build/dachafm-build2-upload.log`, records `Uploaded package is processing.` at 07:50:32.674 MSK, `Upload succeeded.` at **07:50:32.676 MSK**, and `EXPORT SUCCEEDED`. App Store Connect subsequently confirmed **Completed** for build **1.0.0 (2)**, build ID `a16cdc28-e098-4ba1-a9de-7648feff9c15`. The build was added to existing internal group `91124dc5-3999-4c77-b0ec-84da99f8b3dd`; its detail page shows one internal group and one tester. Russian “What to Test” instructions were saved. This is internal TestFlight availability, not external beta review or App Review approval.
 
 See [core-report.md](core-report.md), [ios-app-report.md](ios-app-report.md), and [bridge-report.md](bridge-report.md) for scope. Earlier backend verification remains in [backend-report.md](backend-report.md) and [backend-test-results.txt](backend-test-results.txt).
 
@@ -43,7 +43,7 @@ Build 1 artifacts are local ignored outputs: `ios/build/DachaFM.xcarchive`, `ios
 ## Remaining release checks
 
 1. Complete actual Meteor approval and the signed return on a physical iPhone, along with separate guest/wallet library behavior. The deployed bridge and Meteor entry screen have been verified; no real-wallet approval is claimed yet.
-2. Verify completed Apple processing and TestFlight availability of **1.0.0 (2)**. The upload receipt, simulator tests and signed packaging have passed; physical-device checks of background audio, interruptions, headphone removal and author-page boundaries remain separate.
+2. Test **1.0.0 (2)** through the existing internal TestFlight invitation. Apple processing and group availability are verified; physical-device checks of background audio, interruptions, headphone removal and author-page boundaries remain separate.
 3. For App Review, complete current privacy disclosures, age rating, review access, metadata, moderation/support responsibilities and any Apple account-holder agreement requirements. The previously observed Developer Program agreement banner is not evidence that its updated terms have been accepted.
 4. Confirm the source/content permissions required for public distribution. The inspected upstream repository has no explicit license. The user identifies the catalog as AI-generated; this document does not assert that AI generation or public HTTP accessibility grants distribution rights, and no rights declaration has been submitted to Apple.
 
