@@ -1,112 +1,20 @@
-# near.fm
+# Dacha FM
 
-Decentralized platform for AI-generated music, powered by NEAR Protocol.
+A native iPhone music listener with artist-only playback, playlists, favorites, reversible song hiding, guest listening, and optional Meteor-authenticated cloud synchronization.
 
-Creators upload AI-generated songs, listeners discover and tip artists — all on-chain via NEAR smart contracts. No middlemen.
+- [iOS build and configuration](ios/README.md)
+- [Release status and verification](docs/release/status.md)
+- [Cloud service and tests](supabase/README.md)
+- [Optional mobile API and moderation operations](docs/mobile-api.md)
 
-**Live:** [https://near.fm](https://near.fm)
+Dacha FM streams from the public HTTPS catalog's audio URLs. Guest libraries stay on the iPhone; optional Meteor sign-in opens a separate private cloud library. Build 5 adds **Hide song** and **Settings → Hidden songs → Unhide**. Hiding preserves favorite and playlist membership for restoration and leaves other songs by the artist available. The cloud service preserves hidden songs when older clients save their libraries.
 
-## Architecture
+The native application is in `ios/`. The static Meteor bridge is built from `mobile-bridge/` into `docs/mobile/auth/` and deployed on GitHub Pages; the private cloud service is in `supabase/`. Fresh build 5 validation includes 48 core tests, seven simulator UI tests, 15 Edge tests, 15 PostgreSQL tests and 14 deployed cloud checks. Live audio and the real Meteor entry screen were verified; actual wallet approval and two-device synchronization remain physical-device acceptance checks. See the release status for confirmed Apple delivery receipts. No public App Review submission or approval is claimed.
 
-```
-┌─────────────┐     ┌──────────────┐     ┌────────────────┐
-│  Next.js     │────▶│  Rust/Axum   │────▶│  PostgreSQL    │
-│  Frontend    │     │  API Server  │     │  (testnet/     │
-│  :3847       │     │  :8477       │     │   mainnet)     │
-└─────────────┘     └──────┬───────┘     └────────────────┘
-                           │
-                    ┌──────▼───────┐
-                    │ NEAR Protocol│
-                    │ (RPC + Smart │
-                    │  Contract)   │
-                    └──────────────┘
-```
+An optional owned-service implementation remains in `server/src/mobile/` and `web/src/app/mobile/auth/`. It provides separate Apple/Meteor server accounts and an operator-approved catalog when configured and deployed; it is separate from the default public-catalog/cloud-library mode.
 
-### Components
+## Source provenance
 
-- **`web/`** — Next.js 14 frontend (App Router, Tailwind CSS)
-- **`server/`** — Rust API server (Axum, SQLx, PostgreSQL)
-- **`contract/`** — NEAR smart contract (tips, bounties, virtual balances)
+This repository was forked from [fastnear/near-fm](https://github.com/fastnear/near-fm) at commit `7aa4bad`. Dacha FM is the product name for this fork; upstream product names, protocol names and source attributions are retained only where they identify their original source or technology. No affiliation with the upstream brand is claimed. The inspected upstream revision has no explicit license; distribution rights for the source and music remain a release requirement.
 
-### Key flows
-
-- **Auth:** NEAR wallet signature → server verifies → issues JWT
-- **Upload:** Audio file → FastFS (NEAR storage) → metadata saved to DB
-- **Tips:** User calls smart contract → server verifies tx on-chain → records in DB
-- **Bounties:** Requester deposits NEAR → creators submit songs → requester awards winner on-chain
-
-## Database
-
-Two PostgreSQL containers for network isolation:
-
-| Container | Port | Volume | Network |
-|-----------|------|--------|---------|
-| `postgres` | 5499 | `pgdata` | testnet |
-| `postgres-mainnet` | 5508 | `pgdata_mainnet` | mainnet |
-
-Migrations run automatically on server startup (`server/migrations/`).
-
-### Tables
-
-- `users` — NEAR accounts, reputation, ban/mute status
-- `songs` — uploaded tracks with metadata, votes, play counts
-- `votes` — upvotes/downvotes with reputation-weighted scoring
-- `tips` — on-chain verified tip records
-- `comments` — song comments (require 1 NEAR virtual balance)
-- `song_requests` — bounty requests with on-chain deposits
-- `request_submissions` — songs submitted to fulfill requests
-- `bookmarks`, `reports`, `notifications`, `categories`, `languages`
-
-## Environment
-
-Two `.env` files for network switching:
-
-- `.env.testnet` — testnet config (`near-fm.testnet`, `postgres`)
-- `.env.mainnet` — mainnet config (`near-fm.near`, `postgres-mainnet`)
-
-Switch networks:
-```bash
-cp .env.mainnet .env    # or .env.testnet
-docker compose build server web && docker compose up -d server web
-```
-
-### Key env vars
-
-| Variable | Description |
-|----------|-------------|
-| `DATABASE_URL` | PostgreSQL connection (points to testnet or mainnet container) |
-| `NEAR_NETWORK` | `testnet` or `mainnet` |
-| `CONTRACT_ID` | Smart contract (`near-fm.testnet` / `near-fm.near`) |
-| `NEAR_RPC_URL` | NEAR RPC endpoint |
-| `FASTFS_RECEIVER` | FastFS storage contract |
-| `ADMIN_ACCOUNTS` | Comma-separated admin NEAR accounts |
-| `JWT_SECRET` | JWT signing secret |
-
-## Deployment
-
-```bash
-cd /home/nextjs-user/code/near-fm
-docker compose build server web
-docker compose up -d server web
-```
-
-Git push (deploy key required):
-```bash
-GIT_SSH_COMMAND="ssh -i /home/nextjs-user/.ssh/deploykey_rw -o IdentitiesOnly=yes" git push origin main
-```
-
-## Nginx
-
-- `near.fm` → web (:3847)
-- `api.near.fm` → server (:8477)
-- `upload.near.fm` → separate upload frontend (:3847, same container)
-
-## Admin
-
-Admin accounts defined in `ADMIN_ACCOUNTS` env var. Admin panel at `/admin` with tabs:
-
-- **Reports** — review flagged songs (hide/dismiss)
-- **Songs** — search, hide, delete songs
-- **Requests** — moderate bounty requests, edit titles
-- **Comments** — hide comments, mute/ban users
-- **Categories** — manage song categories
+The original web application and contract remain in the repository as upstream source. Public streaming uses existing source URLs; this fork does not copy or rehost the audio catalog. Technical accessibility and AI generation do not establish a license grant, and no content-rights declaration or App Review approval is asserted here.

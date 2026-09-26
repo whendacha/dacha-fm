@@ -1,0 +1,7 @@
+2026-09-26 — bundle com.whendacha.nearfm
+Final Release device archive: ARCHIVE SUCCEEDED
+Local App Store export: EXPORT SUCCEEDED
+Internal TestFlight upload attempt: FAILED before delivery
+Error Downloading App Information
+IDEDistribution.DistributionAppRecordProviderError.missingApp(bundleId: "com.whendacha.nearfm")
+No Apple upload receipt, processed build or App Review submission exists for this attempt.

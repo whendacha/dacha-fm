@@ -33,3 +33,17 @@ npm-debug.log*
 # Next.js
 next-env.d.ts
 video/
+
+# iOS local build and signing configuration
+.build/
+.swiftpm/
+DerivedData/
+*.xcarchive/
+*.ipa
+xcuserdata/
+ios/Config/Local.xcconfig
+ios/build/
+.superpowers/
+
+# Supabase CLI local metadata
+supabase/.temp/

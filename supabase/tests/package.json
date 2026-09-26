@@ -1,0 +1,8 @@
+{
+  "name": "dacha-cloud-database-tests",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.19.0",
+  "scripts": { "test": "node --test cloud-library.test.mjs" },
+  "dependencies": { "pg": "8.23.0" }
+}

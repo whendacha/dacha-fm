@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="referrer" content="no-referrer">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#12140f">
+    <title>Dacha FM · Meteor sign-in</title>
+    <link rel="icon" href="./mark.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./style.css">
+    <script type="module" src="./bridge.js"></script>
+  </head>
+  <body>
+    <main>
+      <div class="brand"><img src="./mark.svg" alt="" width="44" height="44"><span>Dacha FM</span></div>
+      <section aria-labelledby="heading">
+        <p class="eyebrow">YOUR MUSIC, YOUR SPACE</p>
+        <h1 id="heading">Connect with Meteor.</h1>
+        <p class="intro">Open sign-in from Dacha FM to confirm your wallet identity.</p>
+        <div class="details"><span aria-hidden="true">↗</span><p>You approve one identity message in Meteor. No payment, transaction, or contract access.</p></div>
+        <p id="status" role="status" aria-live="polite">Loading secure sign-in…</p>
+        <button id="prepare" type="button" hidden>Prepare Meteor Wallet <span aria-hidden="true">↗</span></button>
+        <button id="sign" type="button" hidden>Confirm in Meteor <span aria-hidden="true">↗</span></button>
+        <a id="return" class="button" hidden>Return to Dacha FM <span aria-hidden="true">↗</span></a>
+        <button id="cancel" type="button" class="secondary">Cancel</button>
+        <noscript><p class="no-script">JavaScript is needed to connect with Meteor. Enable it, then open sign-in from Dacha FM again.</p></noscript>
+      </section>
+      <footer>Keep your recovery phrase private.<br>Dacha FM will never ask for it.</footer>
+    </main>
+  </body>
+</html>

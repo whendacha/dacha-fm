@@ -1,0 +1,22 @@
+{
+  "name": "dacha-fm-mobile-identity-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.19.0",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test src/protocol.test.mjs",
+    "preview": "python3 -m http.server 8080 --directory ../docs"
+  },
+  "dependencies": {
+    "@near-wallet-selector/core": "10.1.4",
+    "@near-wallet-selector/meteor-wallet": "10.1.4",
+    "buffer": "6.0.3",
+    "process": "0.11.10",
+    "util": "0.12.5"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10"
+  }
+}

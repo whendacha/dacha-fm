@@ -1,11 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { Providers } from "./providers";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
-import { AudioPlayer } from "@/components/player/AudioPlayer";
-import { SignInModal } from "@/components/layout/SignInModal";
+import { AppShell } from "./AppShell";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -58,15 +54,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${inter.variable} font-sans antialiased`}>
         <script dangerouslySetInnerHTML={{ __html: `document.addEventListener('error',function(e){var t=e.target;if(t&&t.tagName==='IMG'){t.style.opacity='0';t.removeAttribute('src')}},true)` }} />
-        <Providers>
-          <div className="min-h-screen flex flex-col pb-24">
-            <Header />
-            <main className="flex-1">{children}</main>
-            <Footer />
-            <AudioPlayer />
-            <SignInModal />
-          </div>
-        </Providers>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

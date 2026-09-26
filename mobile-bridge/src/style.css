@@ -1,0 +1,24 @@
+* { box-sizing: border-box; }
+:root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #f3f2e8; background: #12140f; font-synthesis: none; }
+body { margin: 0; min-height: 100svh; background: radial-gradient(ellipse at 80% 0%, #283320 0, transparent 55%), #12140f; }
+main { width: min(100% - 40px, 460px); margin: 0 auto; padding: max(40px, env(safe-area-inset-top)) 0 max(30px, env(safe-area-inset-bottom)); }
+.brand { display: flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 700; letter-spacing: -.8px; }
+section { margin-top: 54px; }
+.eyebrow { color: #c4dd9b; font-size: 11px; font-weight: 650; letter-spacing: 2px; }
+h1 { margin: 18px 0; max-width: 380px; font-size: clamp(38px, 10vw, 50px); line-height: 1.04; letter-spacing: -2.3px; font-weight: 650; }
+.intro { color: #b6bbad; font-size: 17px; line-height: 1.6; max-width: 360px; }
+.details { display: flex; gap: 15px; padding: 18px; margin: 26px 0 22px; border: 1px solid #394331; border-radius: 18px; background: #20261ac2; }
+.details span { color: #c4dd9b; font-size: 26px; }
+.details p { color: #c2c8b9; margin: 0; font-size: 14px; line-height: 1.6; }
+#status { min-height: 48px; margin: 0 1px 22px; color: #d4dbca; font-size: 14px; line-height: 1.65; overflow-wrap: anywhere; }
+#status[data-phase="error"], #status[data-phase="invalid"] { color: #f7c496; }
+button, .button { display: flex; justify-content: space-between; align-items: center; width: 100%; border: 1px solid transparent; border-radius: 14px; padding: 17px 20px; min-height: 56px; color: #18240c; background: #d6f0b0; font: inherit; font-size: 16px; font-weight: 650; cursor: pointer; text-decoration: none; touch-action: manipulation; }
+button:hover, .button:hover { background: #e5fac9; }
+button:focus-visible, .button:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }
+button:disabled { opacity: .55; cursor: progress; }
+.secondary { justify-content: center; color: #b6bdab; background: transparent; margin-top: 10px; font-weight: 500; }
+.secondary:hover { color: #fff; background: #262e20; }
+[hidden] { display: none !important; }
+footer { color: #838d77; font-size: 12px; line-height: 1.6; text-align: center; margin-top: 32px; }
+.no-script { color: #f7c496; line-height: 1.6; }
+@media (prefers-reduced-motion: no-preference) { button, .button { transition: background .15s ease; } }
