@@ -6,9 +6,9 @@ public enum WalletIdentityError: Error, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .expired: "Время входа истекло. Откройте Meteor ещё раз."
-        case .unavailable: "Не удалось проверить аккаунт Meteor. Проверьте подключение и попробуйте снова."
-        default: "Данные входа Meteor не прошли проверку. Попробуйте снова."
+        case .expired: "Sign-in timed out. Please open Meteor again."
+        case .unavailable: "Your Meteor account could not be verified. Check your connection and try again."
+        default: "The Meteor sign-in details could not be verified. Please try again."
         }
     }
 }
