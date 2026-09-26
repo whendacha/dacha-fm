@@ -1,16 +1,28 @@
 # Dacha FM for iPhone
 
-Native SwiftUI listener for iOS 17+, developed in the [whendacha fork](https://github.com/whendacha/dacha-fm). Build 2 uses the public streaming catalog, author-only queues, editable playlists, favorites, guest listening, AVPlayer/lock-screen controls, author blocking, and optional Meteor Wallet identity verification.
+Native SwiftUI listener for iOS 17+, developed in the [whendacha fork](https://github.com/whendacha/dacha-fm). Build 3 keeps public streaming, author-only queues, editable playlists, favorites, guest listening, AVPlayer/lock-screen controls and author blocking, and adds optional cloud library synchronization through Meteor Wallet.
 
-Build 1 was delivered through TestFlight but lacked service configuration. Build 2 replaces that unavailable catalog with direct public streaming. All three simulator UI tests, signed packaging and deployed-service preflight passed. Apple received **1.0.0 (2)** at **07:50:32 MSK on 26 September 2026** and completed processing. It is available to the existing internal TestFlight group and its invited tester; Russian testing instructions are saved. Actual Meteor approval and the signed return on a physical iPhone remain unverified. See [release status](../docs/release/status.md).
+Apple received and processed **1.0.0 (2)** at **07:50:32 MSK on 26 September 2026**; that build remains the previously verified TestFlight delivery. Build 3 source is configured for the deployed cloud API, whose SQL migration and Edge function have been applied. Nine live HTTPS checks passed using temporary isolated test sessions, and the Swift core suite passed 31 tests. Build 3 UI checks and Apple delivery are recorded separately in the [build 3 notes](../docs/release/build-3-cloud.md) and [release status](../docs/release/status.md). Actual Meteor approval and the signed return on a physical iPhone remain unverified.
 
-## Default build 2 behavior
+## Default build 3 behavior
 
 - Catalog requests go to `https://api.near.fm/api/songs`; audio and artwork load from the HTTPS URLs in the response. No Dacha account token or personal library is sent to the source, and audio is not copied into this repository or offered for offline download.
 - Author queues filter by exact numeric uploader identity. Source pages contain at most 100 songs; each request scans at most three pages and returns the last consumed source page. Author discovery is incremental, not an exhaustive list from the first page. Song search and author-name search are handled separately; an exact author slug can also retrieve a public profile.
-- Guest favorites, playlists and blocked authors persist on the iPhone. Meteor identity opens a separate on-device library for the verified mainnet account. Guest-library merging is explicit. There is no cloud synchronization in this mode.
-- The static HTTPS bridge asks Meteor only to sign the fixed Dacha FM identity message. The app binds the proof to its nonce, state, recipient and five-minute lifetime, verifies its Ed25519 signature, then checks that the key is a mainnet FullAccess key for the claimed account. No transaction, contract permission, private key or seed phrase is requested.
+- Guest favorites, playlists and blocked authors persist on the iPhone without signing in. Signing in with the same Meteor mainnet account on another device selects the same private cloud library. Account and guest files stay separate; importing the guest library is an explicit action.
+- The static HTTPS bridge asks Meteor to sign an explicit cloud-library statement. A server-issued five-minute nonce and native PKCE verifier bind the sign-in to the initiating app. The app verifies the bounded callback proof, and the cloud API independently verifies the signature, PKCE and mainnet FullAccess key before issuing a revocable 30-day session. The bridge never receives the native verifier or the cloud bearer token. No transaction, contract permission, private key or seed phrase is requested.
 - Sign in with Apple is available only in the optional owned-backend mode. Public-catalog reports direct the listener to the source or support; the app does not claim to have submitted a moderation report to an unconfigured backend.
+
+The cloud API is separate from the music source: `CLOUD_API_BASE_URL` handles private libraries and authentication while `MOBILE_API_BASE_URL` stays empty to keep the public catalog adapter. A cloud bearer token is never attached to public catalog, audio or artwork requests. The cloud stores library metadata and track URLs, not audio files.
+
+## Synchronization and account changes
+
+Edits save locally together with their pending-sync metadata before upload. Synchronization runs after sign-in, after edits, when the app becomes active, or when the listener taps the retry/sync control in Settings. Network failures preserve local edits across relaunch. Music still streams from its source; offline library editing does not provide offline audio downloads.
+
+The app fetches the current cloud version before writing and uses compare-and-swap to detect concurrent changes. If both devices changed the library, Settings offers **Use cloud version** or **Use this iPhone's version**. This chooses a complete snapshot, including deletions, order and hidden authors; it does not silently merge conflicting versions. A lost response to an already-committed save is recognized when the cloud content matches the pending local content.
+
+An expired or revoked cloud session requires another Meteor confirmation. Its local account library and pending edits remain accessible. Existing build 2 local wallet profiles show **Enable synchronization through Meteor**, preserving their saved library while requesting the distinct cloud sign-in statement.
+
+Logout revokes the current cloud session and then shows the guest library; a network failure does not falsely report server logout. Account deletion requires server confirmation before the current device removes its account library. It deletes the cloud profile and library and revokes all of that account's server sessions. It does not delete the wallet, blockchain data, guest library, or cached files on another device. Other devices must authenticate again; a subsequent verified sign-in can create a new empty cloud profile.
 
 ## Build and test
 
@@ -38,26 +50,29 @@ Debug supports `--demo` and `--ui-test-store <UUID>` for deterministic local tes
 
 `scripts/generate_project.py` deterministically recreates the project and shared scheme after adding source/resources. `scripts/generate_resources.swift` recreates the original icon/tone. Keep app configuration in xcconfig files so regeneration preserves it.
 
-## Public-mode configuration and static bridge
+## Public catalog, cloud and bridge configuration
 
 Debug and Release contain these defaults:
 
 ```xcconfig
 MOBILE_API_BASE_URL =
+CLOUD_API_BASE_URL = https:/$()/clxaqzlecqiypyiwgkxd.supabase.co/functions/v1/dacha-cloud
 METEOR_BRIDGE_URL = https:/$()/whendacha.github.io/dacha-fm
 PRIVACY_POLICY_URL = https:/$()/whendacha.github.io/dacha-fm/privacy.html
 SUPPORT_URL = https:/$()/whendacha.github.io/dacha-fm/support.html
 ```
 
-`$()` prevents xcconfig from treating `//` as a comment. The bridge setting is a base URL, including the repository path for GitHub Pages; the app appends `/mobile/auth`. The native callback is `dachafm://auth/callback`. The static bridge returns the bounded proof in its URL fragment. It does not issue a backend session or PKCE code.
+`$()` prevents xcconfig from treating `//` as a comment. The bridge setting is a base URL, including the repository path for GitHub Pages; the app appends `/mobile/auth`. The native callback is `dachafm://auth/callback`. The static bridge returns the bounded proof in its URL fragment. The app sends that proof and its private PKCE verifier to the cloud API, which issues the session directly to the app. See [cloud deployment and tests](../supabase/README.md) and the [database contract](../supabase/DB_CONTRACT.md).
 
-Build and publish the static bridge using [mobile-bridge/README.md](../mobile-bridge/README.md). GitHub Pages serves `docs/` over HTTPS at the configured URL, including its generated assets, privacy and support pages. Release preflight verified HTTP 200 responses and the exact deployed JavaScript hash. A simulator UI test exercised the real native browser Prepare/Confirm flow and reached Meteor's clean-wallet entry screen. An actual physical-iPhone Meteor approval and signed return remain a required end-to-end check.
+Build and publish the static bridge using [mobile-bridge/README.md](../mobile-bridge/README.md). GitHub Pages serves `docs/` over HTTPS at the configured URL, including generated assets, privacy and support pages. The bridge accepts both the build 2 local statement and the build 3 cloud statement; it rejects arbitrary messages. The earlier build 2 simulator test reached Meteor's clean-wallet entry screen, which proves neither a completed wallet approval nor build 3 cloud synchronization. Repeat the deployed-asset preflight and build 3 device checks after publishing the cloud-aware bridge.
+
+To intentionally retain build 2-style local identity, leave both API settings empty. The public music source still works, Meteor profiles remain on the device, and no cloud session is created. Do not use that configuration when testing cross-device synchronization.
 
 The ignored `ios/Config/Local.xcconfig` can contain `DEVELOPMENT_TEAM = YOUR_TEAM_ID` and intentional local overrides. Never commit signing secrets or wallet credentials.
 
 ## Optional owned-backend mode
 
-Setting `MOBILE_API_BASE_URL` selects the separate mobile API and its catalog instead of the public adapter. Deploy the Rust backend with `MOBILE_ONLY=true`, a separate migrated database, and the [mobile API configuration and moderation instructions](../docs/mobile-api.md). Its catalog remains empty until an operator approves tracks. This optional mode supplies private versioned cloud libraries, server report storage, revocable sessions, and independent Apple/Meteor accounts.
+The separate legacy Rust mode uses `MOBILE_API_BASE_URL` and leaves `CLOUD_API_BASE_URL` empty. It selects that server's catalog instead of the public adapter. Deploy the Rust backend with `MOBILE_ONLY=true`, a separate migrated database, and the [mobile API configuration and moderation instructions](../docs/mobile-api.md). Its catalog remains empty until an operator approves tracks. This mode supplies private versioned libraries, server report storage, revocable sessions, and independent Apple/Meteor accounts; it is not the default build 3 deployment.
 
 For that mode, deploy the Next.js route `web/src/app/mobile/auth/` on an owned HTTPS origin and configure its server-side `MOBILE_API_URL` and `MOBILE_NEAR_NETWORK`. Use this deployed origin for `METEOR_BRIDGE_URL`; the static local-identity bridge is not interchangeable with the server/PKCE bridge. The server bridge returns a one-time code, which the native app exchanges with its private PKCE verifier.
 
