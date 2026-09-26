@@ -1,5 +1,15 @@
 # Dacha FM release status — 26 September 2026
 
+## Build 4: processed and available in internal TestFlight
+
+Build **1.0.0 (4)** fixes mini-player overlap on pagination and the bottom of library lists, and makes the authored app interface and public help/privacy pages English. Source song titles, artist/account names and user playlist names are preserved. The player occupies its own intrinsic-height row below the navigation stack, keeping pushed destinations clear without a hardcoded player-height estimate.
+
+Fresh validation passed: **31 core tests, 5 iOS UI tests and 7 public release checks**. The UI regression reproduced the old overlap and now confirms catalog/artist pagination loads the next page. Long library, favorites and playlist screens were tested at the largest accessibility text size and with Russian device language. Live streaming, guest persistence and the real Meteor entry flow also passed. The compiled app declares English only; layout-test fixtures are absent from Release. English public pages match the deployed bytes.
+
+The signed archive and App Store export passed. Apple accepted build 4 at **10:52:26 MSK (07:52:26 UTC) on 26 September 2026**. Processing completed, and build 4 (`ae8ee412-4201-41db-90f3-deb6c4bb5b89`) is assigned to the existing internal TestFlight group `91124dc5-3999-4c77-b0ec-84da99f8b3dd`. English testing instructions are saved. IPA SHA-256: `a5699cc0f35f20c34e42e1e194b3d5c4f6ff531f9ad9285ce43806e0c7fecc6a`. Local evidence is saved in `ios/build/dachafm-build4-evidence.json`; screenshots are in `ios/build/DachaFM-Build4-UIEvidence/`.
+
+[Build 4 details](build-4-ui.md) · [iOS setup](../../ios/README.md)
+
 ## Build 3: processed and available in internal TestFlight
 
 Build **1.0.0 (3)** adds optional Meteor-authenticated cloud synchronization for favorites, editable playlists and hidden authors. The server is deployed at `https://clxaqzlecqiypyiwgkxd.supabase.co/functions/v1/dacha-cloud`; its private database migration is applied. Guest listening and public music streaming work independently of cloud authentication.
