@@ -112,10 +112,10 @@ struct ListenView: View {
 
                 VStack(alignment: .leading, spacing: 16) {
                     SectionTitle(title: query.isEmpty ? "Songs" : "Search results", subtitle: "Listen and save")
-                    if model.tracks.isEmpty && !model.catalogLoading {
+                    if model.visibleTracks.isEmpty && !model.catalogLoading {
                         EmptyCard(icon: "music.note", title: "No songs yet", detail: model.isDemo ? "Demo audio is unavailable." : "Try another search or check back later.")
                     }
-                    ForEach(model.tracks) { track in TrackRow(model: model, track: track) { model.playTrack(track) } }
+                    ForEach(model.visibleTracks) { track in TrackRow(model: model, track: track) { model.playTrack(track) } }
                     if model.catalogHasMore {
                         Button { Task { await model.loadMoreCatalog() } } label: {
                             Label("Show more", systemImage: "arrow.down")
@@ -153,7 +153,7 @@ struct ArtistDetailView: View {
                         .font(.headline).frame(maxWidth: .infinity).padding(17)
                         .background(Theme.accent, in: RoundedRectangle(cornerRadius: 16)).foregroundStyle(.black)
                 }
-                .disabled(model.selectedArtistTracks.isEmpty)
+                .disabled(model.visibleArtistTracks.isEmpty)
                 HStack {
                     Text("Songs").font(.title2.bold())
                     Spacer()
@@ -163,10 +163,10 @@ struct ArtistDetailView: View {
                     } label: { Image(systemName: "ellipsis.circle").font(.title3) }
                         .accessibilityLabel("Artist options")
                 }
-                ForEach(model.selectedArtistTracks) { track in
+                ForEach(model.visibleArtistTracks) { track in
                     TrackRow(model: model, track: track) { model.playArtist(artist, starting: track) }
                 }
-                if model.selectedArtistTracks.isEmpty { EmptyCard(icon: "music.note", title: model.selectedArtistHasMore ? "Finding songs" : "No songs", detail: model.selectedArtistHasMore ? "Load the next catalog page to keep looking." : "This artist has no available recordings yet.") }
+                if model.visibleArtistTracks.isEmpty { EmptyCard(icon: "music.note", title: model.selectedArtistHasMore ? "Finding songs" : "No songs", detail: model.selectedArtistHasMore ? "Load the next catalog page to keep looking." : "No visible songs. You can restore hidden music in Settings.") }
                 if model.selectedArtistHasMore {
                     Button("Show more") { Task { await model.loadMoreArtistTracks(artistID: artist.id) } }
                         .frame(maxWidth: .infinity).padding(14).background(Theme.surface, in: RoundedRectangle(cornerRadius: 14))
@@ -202,7 +202,7 @@ struct LibraryView: View {
                                 .frame(width: 50, height: 50).background(Theme.elevated, in: RoundedRectangle(cornerRadius: 12))
                             VStack(alignment: .leading, spacing: 3) {
                                 Text("Favorites").font(.headline)
-                                Text("\(library.favorites.count) songs").font(.caption).foregroundStyle(Theme.muted)
+                                Text(songCountLabel(model.visibleFavorites.count)).font(.caption).foregroundStyle(Theme.muted)
                             }
                             Spacer()
                             Image(systemName: "chevron.right").foregroundStyle(Theme.muted)
@@ -222,7 +222,7 @@ struct LibraryView: View {
                                     .frame(width: 54, height: 54).background(Theme.elevated, in: RoundedRectangle(cornerRadius: 12))
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(playlist.name).font(.headline)
-                                    Text("\(playlist.tracks.count) songs").font(.caption).foregroundStyle(Theme.muted)
+                                    Text(songCountLabel(model.visibleTracks(in: playlist.tracks).count)).font(.caption).foregroundStyle(Theme.muted)
                                 }
                                 Spacer()
                                 Image(systemName: "chevron.right").foregroundStyle(Theme.muted)
@@ -248,9 +248,9 @@ struct FavoritesView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 10) {
-                if model.library?.favorites.isEmpty != false { EmptyCard(icon: "heart", title: "No favorites yet", detail: "Tap the heart beside a song to save it.") }
-                ForEach(model.library?.favorites ?? []) { track in
-                    TrackRow(model: model, track: track) { model.playTracks(model.library?.favorites ?? [], startID: track.id) }
+                if model.visibleFavorites.isEmpty { EmptyCard(icon: "heart", title: "No visible favorites", detail: "Tap a heart to save a song, or restore hidden songs in Settings.") }
+                ForEach(model.visibleFavorites) { track in
+                    TrackRow(model: model, track: track) { model.playTracks(model.visibleFavorites, startID: track.id) }
                 }
             }.padding(20)
         }.accessibilityIdentifier("favorites-scroll").background(Theme.background).navigationTitle("Favorites")
@@ -268,10 +268,11 @@ struct PlaylistView: View {
     var body: some View {
         VStack(spacing: 0) {
             if let playlist {
+                let visibleSongs = model.visibleTracks(in: playlist.tracks)
                 HStack {
                     VStack(alignment: .leading, spacing: 5) {
                         Text(playlist.name).font(.largeTitle.bold())
-                        Text("\(playlist.tracks.count) songs · drag to reorder")
+                        Text("\(songCountLabel(visibleSongs.count)) · drag to reorder")
                             .font(.caption).foregroundStyle(Theme.muted)
                     }
                     Spacer()
@@ -284,9 +285,9 @@ struct PlaylistView: View {
                 Button { model.playPlaylist(playlist) } label: {
                     Label("Play playlist", systemImage: "play.fill").frame(maxWidth: .infinity).padding(14)
                         .background(Theme.accent, in: RoundedRectangle(cornerRadius: 14)).foregroundStyle(.black)
-                }.disabled(playlist.tracks.isEmpty).padding(.horizontal, 20)
+                }.disabled(visibleSongs.isEmpty).padding(.horizontal, 20)
                 List {
-                    ForEach(playlist.tracks) { track in
+                    ForEach(visibleSongs) { track in
                         TrackRow(model: model, track: track) { model.playPlaylist(playlist, startID: track.id) }
                             .listRowBackground(Theme.background)
                             .swipeActions { Button("Remove", role: .destructive) { model.remove(track.id, from: playlistID) } }
@@ -338,9 +339,11 @@ struct TrackRow: View {
             Menu {
                 Button("Add to playlist", systemImage: "text.badge.plus") { addPresented = true }
                 Button("Report", systemImage: "flag") { reportPresented = true }
+                Button("Hide song", systemImage: "eye.slash") { model.hideTrack(track) }
                 Button("Hide artist", systemImage: "hand.raised", role: .destructive) { model.blockArtist(track.artistID) }
             } label: { Image(systemName: "ellipsis").frame(width: 28, height: 38).foregroundStyle(Theme.muted) }
                 .accessibilityLabel("Song options")
+                .accessibilityIdentifier("song-options-\(track.id)")
         }
         .padding(11).background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
         .confirmationDialog("Add to playlist", isPresented: $addPresented) {
@@ -369,6 +372,12 @@ struct ReportView: View {
                             Link("Open recording page", destination: url)
                         } else {
                             Link("Open source catalog", destination: URL(string: "https://near.fm")!)
+                        }
+                        if let track {
+                            Button("Hide song", systemImage: "eye.slash") {
+                                model.hideTrack(track)
+                                dismiss()
+                            }
                         }
                         Button("Hide this artist") {
                             if let id = artistID ?? track?.artistID { model.blockArtist(id) }
@@ -449,4 +458,8 @@ struct EmptyCard: View {
             Text(detail).font(.subheadline).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
         }.frame(maxWidth: .infinity).padding(28).background(Theme.surface, in: RoundedRectangle(cornerRadius: 20))
     }
+}
+
+func songCountLabel(_ count: Int) -> String {
+    count == 1 ? "1 song" : "\(count) songs"
 }

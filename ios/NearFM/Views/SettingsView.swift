@@ -99,6 +99,19 @@ struct SettingsView: View {
                     }
                 }
 
+                NavigationLink { HiddenSongsView(model: model) } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "eye.slash").foregroundStyle(Theme.accent)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Hidden songs").font(.headline)
+                            Text(songCountLabel(model.library?.hiddenTracks.count ?? 0))
+                                .font(.caption).foregroundStyle(Theme.muted)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right").foregroundStyle(Theme.muted)
+                    }.padding(16).background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
+                }.buttonStyle(.plain).accessibilityIdentifier("hidden-songs-link")
+
                 if let blocked = model.library?.blockedArtistIDs, !blocked.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
                         SectionTitle(title: "Hidden artists", subtitle: "Their music is hidden and will not play")
@@ -121,6 +134,7 @@ struct SettingsView: View {
                 }
             }.padding(20)
         }
+        .accessibilityIdentifier("settings-scroll")
         .background(Theme.background)
         .navigationBarHidden(true)
         .confirmationDialog("Sign out?", isPresented: $logoutConfirmation) {
@@ -147,6 +161,42 @@ struct SettingsView: View {
         case .syncing: Theme.accent
         case .offline, .conflict, .reauthenticationRequired: .orange
         }
+    }
+}
+
+struct HiddenSongsView: View {
+    let model: AppModel
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 14) {
+                Text("Hidden songs will not appear in lists or play. They stay saved in your favorites and playlists, ready to restore.")
+                    .font(.subheadline).foregroundStyle(Theme.muted)
+                if model.library?.hiddenTracks.isEmpty != false {
+                    EmptyCard(icon: "eye", title: "No hidden songs", detail: "Use Hide song in a song's options to hide only that recording.")
+                }
+                ForEach(model.library?.hiddenTracks ?? []) { track in
+                    HStack(spacing: 12) {
+                        Artwork(url: track.artworkURL, symbol: "music.note", size: 44)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(track.title).font(.subheadline.weight(.semibold)).lineLimit(2)
+                            Text(track.artistName).font(.caption).foregroundStyle(Theme.muted)
+                            if model.blockedIDs.contains(track.artistID) {
+                                Text("This artist is also hidden.").font(.caption).foregroundStyle(Theme.muted)
+                            }
+                        }
+                        Spacer(minLength: 8)
+                        Button("Unhide") { model.unhideTrack(track.id) }
+                            .font(.subheadline.weight(.semibold))
+                            .frame(minHeight: 44)
+                            .accessibilityIdentifier("unhide-track-\(track.id)")
+                    }.padding(12).background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
+                }
+            }.padding(20)
+        }
+        .accessibilityIdentifier("hidden-songs-scroll")
+        .background(Theme.background)
+        .navigationTitle("Hidden songs")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

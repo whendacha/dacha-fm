@@ -79,6 +79,15 @@ struct PlayerView: View {
                             Image(systemName: model.isFavorite(track) ? "heart.fill" : "heart")
                                 .font(.title2).foregroundStyle(Theme.accent)
                         }.accessibilityLabel(model.isFavorite(track) ? "Remove from favorites" : "Add to favorites")
+                        Menu {
+                            Button("Hide song", systemImage: "eye.slash") {
+                                model.hideTrack(track)
+                                if model.player.current == nil { dismiss() }
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle").font(.title2).frame(width: 44, height: 44)
+                        }.accessibilityLabel("Song options")
+                            .accessibilityIdentifier("player-song-options")
                     }
                     VStack(spacing: 4) {
                         Slider(value: $seekValue, in: 0...max(1, model.player.duration)) { editing in
