@@ -1,16 +1,17 @@
 # Dacha FM
 
-A native iPhone music listener with author-only playback, playlists, favorites, guest listening, and optional Meteor Wallet identity verification.
+A native iPhone music listener with artist-only playback, playlists, favorites, reversible song hiding, guest listening, and optional Meteor-authenticated cloud synchronization.
 
 - [iOS build and configuration](ios/README.md)
-- [Mobile API and moderation operations](docs/mobile-api.md)
 - [Release status and verification](docs/release/status.md)
+- [Cloud service and tests](supabase/README.md)
+- [Optional mobile API and moderation operations](docs/mobile-api.md)
 
-Build 2 connects directly to the public HTTPS music catalog and streams audio from the URLs returned by that catalog. It does not require a Dacha FM backend for listening. Favorites, playlists and blocked authors stay on the iPhone, with separate guest and wallet libraries. Meteor signs a one-time identity message; the native app verifies its signature and mainnet account-key ownership before opening that wallet's local library. This mode has no cloud synchronization or Sign in with Apple.
+Dacha FM streams from the public HTTPS catalog's audio URLs. Guest libraries stay on the iPhone; optional Meteor sign-in opens a separate private cloud library. Build 5 adds **Hide song** and **Settings → Hidden songs → Unhide**. Hiding preserves favorite and playlist membership for restoration and leaves other songs by the artist available. The cloud service preserves hidden songs when older clients save their libraries.
 
-The iPhone application is in `ios/`. The static Meteor bridge is built from `mobile-bridge/` into `docs/mobile/auth/` and deployed on GitHub Pages. Native signature tests, all three simulator UI tests, live audio playback and the bridge-to-Meteor entry flow have passed; actual Meteor approval and the signed return on a physical iPhone still need verification. Apple received **1.0.0 (2)** at **07:50:32 MSK on 26 September 2026** and completed processing. The build is available to the existing internal TestFlight group and its invited tester. See the release status for the receipt and test evidence.
+The native application is in `ios/`. The static Meteor bridge is built from `mobile-bridge/` into `docs/mobile/auth/` and deployed on GitHub Pages; the private cloud service is in `supabase/`. Fresh build 5 validation includes 48 core tests, seven simulator UI tests, 15 Edge tests, 15 PostgreSQL tests and 14 deployed cloud checks. Live audio and the real Meteor entry screen were verified; actual wallet approval and two-device synchronization remain physical-device acceptance checks. See the release status for confirmed Apple delivery receipts. No public App Review submission or approval is claimed.
 
-An optional owned-service implementation remains in `server/src/mobile/` and `web/src/app/mobile/auth/`. It provides separate Apple/Meteor server accounts, cloud libraries and an operator-approved catalog when configured and deployed; it is not the default build 2 mode.
+An optional owned-service implementation remains in `server/src/mobile/` and `web/src/app/mobile/auth/`. It provides separate Apple/Meteor server accounts and an operator-approved catalog when configured and deployed; it is separate from the default public-catalog/cloud-library mode.
 
 ## Source provenance
 
