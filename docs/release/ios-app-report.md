@@ -1,26 +1,34 @@
 # iOS listener implementation report
 
-Date: 2026-09-26
+Date: 2026-09-26. Current source targets Dacha FM **1.0.0 (2)**. Its simulator UI tests and signed packaging have passed. Apple received it at **07:50:32 MSK (04:50:32 UTC)** and reported it processing; TestFlight readiness remains unverified. Build 1 was previously delivered through TestFlight.
 
-## Implemented
+## Current listener mode
 
-- Native iOS 17 SwiftUI listener with Russian dark music UI, artist catalog/search, paginated author pages, favorites, editable playlists, settings, reporting, blocking, mini player and full player.
-- `AVPlayer` playback with strict author queues, explicit mixed-author playlist queues, background audio category, Now Playing metadata, remote commands, seek, shuffle/repeat, interruption and headphone removal handling. Queue and position restore paused. A blocked artist is removed immediately.
-- Guest library stored on disk. Signed-in libraries use separate files keyed by a hash of user ID; restored playback is tagged by account ID. Guest merge is an explicit action. Sync uses optimistic versioning, preserves pending local edits, and presents a choice on 409 conflict. Account deletion clears the local account only after server confirmation.
-- Guest mode and the pending guest merge share the same in-memory store instance, so guest edits remain current across sign-in and logout. At an author page boundary, playback fetches remaining pages before repeat can wrap to the first song.
-- Asynchronous library responses are bound to a specific account session generation; delayed conflict fetches cannot populate a later login, including a relogin to the same user ID. Author-page responses only advance playback while the matching user intent remains active. Pausing, seeking, going back, shuffle, interruptions and headphone removal invalidate it. Playback position is checkpointed about every five seconds and when the app enters the background.
-- If a listener asks for Next again while the same author page is loading, the in-flight response serves the latest intent. A failed song at a page boundary continues into later author pages when available; it never triggers a repeat loop over failed songs.
-- Apple authorization uses the system Sign in with Apple button, a random nonce and lowercase SHA256 nonce hash sent to Apple; raw nonce, identity token and authorization code go to the mobile API. Meteor uses a random PKCE verifier/state through `ASWebAuthenticationSession`, validates `dachafm://auth/callback` and exchanges a one-time code. Session token stays in Keychain.
-- Live networking requires `MobileAPIBaseURL` in Info.plist. `MeteorBridgeURL` is the HTTPS **origin**; the client appends `/mobile/auth`. `PrivacyPolicyURL` and `SupportURL` are optional, but required for a release with working links. HTTP is accepted only for DEBUG localhost. Missing configuration produces an unavailable state. DEBUG `--demo` uses a bundled `demo.wav` and labels it as demo; `--ui-test-store <UUID>` isolates UI-test storage.
+The native iOS 17 SwiftUI application provides artist discovery, author-only queues, favorites, editable playlists, blocking, guest listening, a mini player and full player. With `MOBILE_API_BASE_URL` empty, a dedicated credential-free adapter reads the live public catalog and streams the existing HTTPS audio URLs. It does not require the separate Rust API for listening.
 
-## Verification
+Public song mapping uses the song UUID and stable numeric uploader ID. Records marked hidden, deleted or unvalidated, and records without a usable HTTPS audio URL, are excluded. Author requests filter exact IDs while scanning bounded source pages; page cursors and `hasMore` use the raw source response. Discovery remains incremental. Public-mode reporting opens the source/support path instead of claiming that an absent backend received a report.
 
-- `xcodebuild -quiet -project ios/NearFM.xcodeproj -scheme NearFM -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build` passed after the final UI, playback and sync edits.
-- `swift test --package-path ios/Packages/NearFMCore` passed: 11 tests, including delayed playback-page intent and author page-boundary regressions, mixed playlist queue, library persistence and wire format.
-- Root owns simulator launch/screenshots and full integration checks. This report does not claim a live backend, Apple login, Meteor wallet signature, physical-device background playback or App Store upload verification.
+`AVPlayer` handles author queues and explicit mixed-author playlists, background audio, Now Playing/remote commands, seek, shuffle/repeat, interruptions and headphone removal. Position checkpoints are written approximately every five seconds and on background entry; restoration starts paused. Blocking removes an author from the queue. At an author-page boundary, further pages are fetched before repeat wraps; late responses only advance playback while the matching intent remains active.
 
-## Live integration and release needs
+Libraries are local in this mode. Guest and wallet libraries use separate files; an explicit action merges the guest library. Account changes clear playback and invalidate account-dependent work. There is no cloud synchronization or Sign in with Apple in the default public-catalog configuration.
 
-- Set real HTTPS mobile API and Meteor bridge origins, deploy the backend and web bridge, and test both sign-in methods end to end. The Meteor browser/wallet callback remains unverified on a physical iPhone.
-- Verify catalog licensing, code/brand rights, moderation operation, privacy/support URLs, Apple developer signing and App Store Connect access before distribution.
-- Test account switching, 409 resolution, server-side deletion and reporting against a live PostgreSQL-backed service; simulator demo mode cannot establish these behaviors.
+Meteor opens the static HTTPS bridge through `ASWebAuthenticationSession`. The bridge signs the fixed identity statement without calling wallet `signIn`, requesting contract access or initiating a transaction. The native verifier checks the original nonce, state, recipient, Ed25519 signature, callback shape and five-minute expiry, then verifies mainnet FullAccess-key ownership through the fixed RPC endpoint. Only the verified account ID is accepted for the on-device library; no upstream or Dacha server account is created. Keychain stores the local identity. Logout returns to guest mode; deletion concerns the local Dacha profile/library, not the wallet or blockchain.
+
+## Configuration
+
+The native app's bridge base defaults to `https://whendacha.github.io/dacha-fm`; it appends `/mobile/auth`. Static bridge sources are in `mobile-bridge/`, generated output in `docs/mobile/auth/`, with `docs/privacy.html` and `docs/support.html`. Release preflight verified these deployed HTTPS pages/assets, including an exact match between local and served bridge JavaScript.
+
+Debug `--demo` uses a labeled, original bundled tone, and `--ui-test-store <UUID>` isolates test storage. Normal Release behavior uses the public catalog rather than the demo.
+
+The optional owned-backend mode remains implemented and is selected by a nonempty `MobileAPIBaseURL`. It requires its own Rust API and server/PKCE Next.js bridge, plus configured Apple credentials to enable Apple sign-in. That mode provides server accounts, cloud libraries/conflict handling and report storage. Its service setup is separate from the static local-identity bridge; see [the iOS README](../../ios/README.md).
+
+## Verification and limits
+
+- Shared core tests passed on 26 September 2026 at 07:46 MSK: **19 tests, 0 failures**, including public schema and native signature/RPC response validation.
+- Native Swift URLSession smoke testing fetched 100 live tracks, 12 authors, and an author-only response of 10 tracks all matching uploader ID 32.
+- The public adapter and existing MobileAPI passed a Swift typecheck. A public audio endpoint passed HEAD and bounded byte-range checks; this is not evidence that every source track plays successfully.
+- All **three build 2 iOS simulator UI tests passed at 07:48:48 MSK**, in `/tmp/DachaFM-Build2-UITests.xcresult`. They cover persistent guest favorites/playlists and author playback, live streaming, and the native browser's bridge-to-Meteor entry flow.
+- Live playback of “Beautiful India” by `tinsman.near` progressed to `0:05`. The real `ASWebAuthenticationSession` Prepare/Confirm flow opened `wallet.meteorwallet.app` and the clean-wallet “Get Started” screen. No wallet was created, imported or used to approve a signature in that test.
+- `python3 ios/scripts/preflight_public_release.py --json` passed: deployed bridge/assets and privacy/support pages returned HTTP 200, bridge JavaScript matched SHA-256 `9a3a110692b88cda42f1c378d9003260efd07f90de9814e7d0ca81b8dee9a2fa`, the first catalog page contained 100 playable songs, and the audio HEAD probe returned 200.
+- Signed Release archive/export for **1.0.0 (2)** passed, as did IPA ZIP integrity and strict code-signature checks. The IPA at `ios/build/DachaFM-Build2-AppStore/DachaFM.ipa` has SHA-256 `d4bb34cb9bc4550b7e4d107f9d1a2f8380772c35fe1c48a96670aed67306db0e`. Sanitized evidence is in `ios/build/dachafm-build2-evidence.json`.
+- Apple upload succeeded at **07:50:32.676 MSK**, confirmed by `ios/build/dachafm-build2-upload.log`, which also reports the uploaded package processing and `EXPORT SUCCEEDED`. TestFlight readiness remains unverified. Actual Meteor approval and the signed return on a physical iPhone remain unverified, as do physical-device background/route-interruption checks. Reaching the Meteor entry screen and verifying controlled signatures do not substitute for real wallet approval.
