@@ -2,6 +2,84 @@ import XCTest
 
 @MainActor
 final class ListenerUITests: XCTestCase {
+    func testPlayerHidingPreservesPauseAndHandlesEmptyQueue() throws {
+        let app = layoutApp()
+        app.launch()
+        XCTAssertTrue(app.buttons["artist-demo-layout-artist"].waitForExistence(timeout: 10))
+        app.buttons["artist-demo-layout-artist"].tap()
+        app.buttons["Play this artist only"].tap()
+        app.buttons["open-player"].tap()
+        app.buttons["Pause"].firstMatch.tap()
+        app.buttons["player-song-options"].tap()
+        app.buttons["Hide song"].tap()
+        XCTAssertTrue(app.staticTexts["Layout track 02"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Play"].firstMatch.exists, "Hiding a paused current song must not start playback")
+        XCTAssertFalse(app.buttons["Pause"].exists)
+        app.buttons["Minimize player"].tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        let listen = app.scrollViews["listen-scroll"]
+        let single = app.buttons["play-track-layout-track-02"]
+        for _ in 0..<4 { if single.isHittable { break }; listen.swipeUp() }
+        single.tap()
+        app.buttons["open-player"].tap()
+        app.buttons["player-song-options"].tap()
+        app.buttons["Hide song"].tap()
+        let empty = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.otherElements["mini-player"])
+        XCTAssertEqual(XCTWaiter.wait(for: [empty], timeout: 5), .completed)
+        XCTAssertTrue(app.tabBars.buttons["Settings"].isHittable, "Hiding the sole queued song must close the player")
+        XCTAssertFalse(single.exists)
+        XCTAssertTrue(app.buttons["play-track-layout-track-03"].exists, "Other songs by the same artist must remain available")
+    }
+
+    func testHideOneSongPersistsAndUnhideRestoresLibrary() throws {
+        let app = layoutApp()
+        app.launch()
+        let artist = app.buttons["artist-demo-layout-artist"]
+        XCTAssertTrue(artist.waitForExistence(timeout: 10))
+        artist.tap()
+        let playArtist = app.buttons["Play this artist only"]
+        XCTAssertTrue(playArtist.waitForExistence(timeout: 5))
+        playArtist.tap()
+        let artistScroll = app.scrollViews["artist-scroll"]
+        let options = artistScroll.buttons["Song options"].firstMatch
+        for _ in 0..<4 { if options.isHittable { break }; artistScroll.swipeUp() }
+        options.tap()
+        let hide = app.buttons["Hide song"]
+        guard hide.waitForExistence(timeout: 3) else { XCTFail("A song needs its own Hide song action"); return }
+        hide.tap()
+        let first = app.buttons["play-track-layout-track-01"]
+        XCTAssertFalse(first.exists)
+        let mini = app.otherElements["mini-player"]
+        XCTAssertTrue(mini.staticTexts["Layout track 02"].waitForExistence(timeout: 5), "Hiding the current song must keep the artist's next song available")
+        XCTAssertTrue(mini.buttons["Pause"].exists)
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons["artist-demo-layout-artist"].waitForExistence(timeout: 10))
+        XCTAssertFalse(first.exists, "Hidden songs must remain hidden after relaunch")
+        app.tabBars.buttons["Library"].tap()
+        app.buttons["favorites-link"].tap()
+        XCTAssertFalse(first.exists)
+        XCTAssertTrue(app.buttons["play-track-layout-track-02"].exists)
+        app.tabBars.buttons["Settings"].tap()
+        let settings = app.scrollViews["settings-scroll"]
+        let hiddenSongs = app.buttons["hidden-songs-link"]
+        for _ in 0..<8 { if hiddenSongs.isHittable { break }; settings.swipeUp() }
+        XCTAssertTrue(hiddenSongs.isHittable)
+        hiddenSongs.tap()
+        let unhide = app.buttons["unhide-track-layout-track-01"]
+        XCTAssertTrue(unhide.isHittable)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Hidden song with restore action"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        unhide.tap()
+        app.tabBars.buttons["Library"].tap()
+        XCTAssertTrue(first.waitForExistence(timeout: 5), "Unhide must restore saved Favorites membership")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.buttons["playlist-layout-playlist-01"].tap()
+        XCTAssertTrue(first.waitForExistence(timeout: 5), "Unhide must restore saved playlist membership")
+    }
+
     func testPaginationControlsRemainAboveMiniPlayer() throws {
         let app = layoutApp()
         app.launch()
