@@ -27,11 +27,13 @@ final class AppModel {
     let player: AudioPlayer
 
     private let authentication = AuthenticationService()
+    private let publicCatalog = PublicCatalog()
     private let baseURL = MobileAPI.configuredURL("MobileAPIBaseURL")
     private let bridgeURL = MobileAPI.configuredURL("MeteorBridgeURL")
     private var libraryStore: LibraryStore?
     private var guestStore: LibraryStore?
     private var libraryRevision = 0
+    private var catalogGeneration = UUID()
     private var artistPage = 1
     private var trackPage = 1
     private var browseArtistPage = 0
@@ -50,7 +52,9 @@ final class AppModel {
 
     var library: LibrarySnapshot? { _ = libraryRevision; return libraryStore?.snapshot }
     var isSignedIn: Bool { account != nil }
-    var apiConfigured: Bool { baseURL != nil }
+    var usesPublicCatalog: Bool { baseURL == nil }
+    var apiConfigured: Bool { true }
+    var cloudSyncEnabled: Bool { !usesPublicCatalog && account?.isLocalWallet != true }
     var privacyURL: URL? { config?.privacyURL ?? MobileAPI.configuredURL("PrivacyPolicyURL") }
     var supportURL: URL? { config?.supportURL ?? MobileAPI.configuredURL("SupportURL") }
     var canAppleLogin: Bool { config?.appleEnabled == true }
@@ -63,17 +67,19 @@ final class AppModel {
         isDemo = false
         #endif
         let directory = Self.storageDirectory()
-        let restoredAccount = Self.testStoreID == nil ? SessionKeychain.load() : nil
+        let savedAccount = Self.testStoreID == nil ? SessionKeychain.load() : nil
+        let restoredAccount = (MobileAPI.configuredURL("MobileAPIBaseURL") == nil && savedAccount?.isLocalWallet != true) ? nil : savedAccount
         player = AudioPlayer(restoreURL: directory.appending(path: "playback.json"), ownerID: restoredAccount?.userID)
         do {
             guestStore = try LibraryStore(fileURL: directory.appending(path: "guest-library.json"))
             account = restoredAccount
             if let userID = restoredAccount?.userID {
                 libraryStore = try LibraryStore(fileURL: Self.libraryURL(for: userID))
+                guestMergeAvailable = !(guestStore?.snapshot.favorites.isEmpty ?? true) || !(guestStore?.snapshot.playlists.isEmpty ?? true)
             } else {
                 libraryStore = guestStore
             }
-            syncState = account == nil ? .local : .offline
+            syncState = account == nil || account?.isLocalWallet == true ? .local : .offline
         } catch {
             errorText = "Библиотеку не удалось открыть: \(error.localizedDescription). Данные на диске сохранены."
         }
@@ -116,6 +122,15 @@ final class AppModel {
     }
 
     private func api() -> MobileAPI { MobileAPI(baseURL: baseURL, accessToken: account?.accessToken) }
+    private func catalogTracks(query: String = "", artistID: String? = nil, page: Int = 1) async throws -> TrackPage {
+        if usesPublicCatalog { return try await publicCatalog.tracks(query: query, artistID: artistID, page: page) }
+        return try await api().tracks(query: query, artistID: artistID, page: page)
+    }
+    private func catalogArtists(query: String = "", page: Int = 1) async throws -> ArtistPage {
+        if usesPublicCatalog { return try await publicCatalog.artists(query: query, page: page) }
+        return try await api().artists(query: query, page: page)
+    }
+
     private var pendingKey: String? {
         guard let account else { return nil }
         return "library-pending-\(account.userID)"
@@ -140,54 +155,67 @@ final class AppModel {
             #endif
             return
         }
-        guard apiConfigured else { errorText = MobileAPIError.unconfigured.localizedDescription; return }
-        do { config = try await api().config() }
-        catch { errorText = error.localizedDescription }
+        if usesPublicCatalog {
+            config = MobileConfig(meteorEnabled: bridgeURL != nil, appleEnabled: false, privacyURL: privacyURL, supportURL: supportURL)
+        } else {
+            do { config = try await api().config() }
+            catch { errorText = error.localizedDescription }
+        }
         await search("")
         if account != nil { await refreshLibrary() }
     }
 
     func search(_ text: String) async {
         searchText = text
+        catalogGeneration = UUID()
+        let generation = catalogGeneration
         artistPage = 1
         trackPage = 1
         guard !isDemo else { return }
         catalogLoading = true
-        defer { catalogLoading = false }
+        defer { if catalogGeneration == generation { catalogLoading = false } }
         do {
-            async let foundArtists = api().artists(query: text)
-            async let foundTracks = api().tracks(query: text)
+            async let foundArtists = catalogArtists(query: text)
+            async let foundTracks = catalogTracks(query: text)
             let (a, t) = try await (foundArtists, foundTracks)
-            guard text == searchText else { return }
+            guard generation == catalogGeneration else { return }
+            artistPage = a.page
+            trackPage = t.page
             artists = a.artists.filter { !blockedIDs.contains($0.id) }
             tracks = t.tracks.filter { !blockedIDs.contains($0.artistID) }
             artistHasMore = a.hasMore
             catalogHasMore = t.hasMore
-        } catch { errorText = error.localizedDescription }
+        } catch { if catalogGeneration == generation { errorText = error.localizedDescription } }
     }
 
     func loadMoreCatalog() async {
         guard catalogHasMore, !catalogLoading, !isDemo else { return }
+        let generation = catalogGeneration
+        let query = searchText
         catalogLoading = true
-        defer { catalogLoading = false }
+        defer { if catalogGeneration == generation { catalogLoading = false } }
         do {
-            let page = try await api().tracks(query: searchText, page: trackPage + 1)
+            let page = try await catalogTracks(query: query, page: trackPage + 1)
+            guard catalogGeneration == generation else { return }
             trackPage = page.page
-            tracks.append(contentsOf: page.tracks.filter { !blockedIDs.contains($0.artistID) && !tracks.contains($0) })
+            tracks.append(contentsOf: page.tracks.filter { incoming in !blockedIDs.contains(incoming.artistID) && !tracks.contains(where: { $0.id == incoming.id }) })
             catalogHasMore = page.hasMore
-        } catch { errorText = error.localizedDescription }
+        } catch { if catalogGeneration == generation { errorText = error.localizedDescription } }
     }
 
     func loadMoreArtists() async {
         guard artistHasMore, !catalogLoading, !isDemo else { return }
+        let generation = catalogGeneration
+        let query = searchText
         catalogLoading = true
-        defer { catalogLoading = false }
+        defer { if catalogGeneration == generation { catalogLoading = false } }
         do {
-            let page = try await api().artists(query: searchText, page: artistPage + 1)
+            let page = try await catalogArtists(query: query, page: artistPage + 1)
+            guard catalogGeneration == generation else { return }
             artistPage = page.page
-            artists.append(contentsOf: page.artists.filter { !blockedIDs.contains($0.id) && !artists.contains($0) })
+            artists.append(contentsOf: page.artists.filter { incoming in !blockedIDs.contains(incoming.id) && !artists.contains(where: { $0.id == incoming.id }) })
             artistHasMore = page.hasMore
-        } catch { errorText = error.localizedDescription }
+        } catch { if catalogGeneration == generation { errorText = error.localizedDescription } }
     }
 
     func selectArtist(_ artist: Artist) async {
@@ -213,7 +241,7 @@ final class AppModel {
         defer { if browseArtistLoadingID == artistID && browseGeneration == generation { browseArtistLoadingID = nil } }
         let requestedPage = browseArtistPage + 1
         do {
-            let page = try await api().tracks(artistID: artistID, page: requestedPage)
+            let page = try await catalogTracks(artistID: artistID, page: requestedPage)
             guard selectedArtist?.id == artistID, browseGeneration == generation else { return }
             browseArtistPage = page.page
             selectedArtistHasMore = page.hasMore
@@ -244,7 +272,7 @@ final class AppModel {
         do {
             while player.artistID == artistID && playbackGeneration == generation {
                 let pageNumber = (playbackArtistPages[artistID] ?? 0) + 1
-                let page = try await api().tracks(artistID: artistID, page: pageNumber)
+                let page = try await catalogTracks(artistID: artistID, page: pageNumber)
                 guard player.artistID == artistID, playbackGeneration == generation,
                       !blockedIDs.contains(artistID) else { return }
                 playbackArtistPages[artistID] = page.page
@@ -302,7 +330,7 @@ final class AppModel {
         do {
             try body(libraryStore)
             libraryRevision += 1
-            if isSignedIn { setPending(true); requestSync() }
+            if isSignedIn && cloudSyncEnabled { setPending(true); requestSync() }
         } catch { errorText = error.localizedDescription }
     }
 
@@ -342,7 +370,14 @@ final class AppModel {
         guard canMeteorLogin else { errorText = "Вход через Meteor временно недоступен."; return }
         isAuthenticating = true
         defer { isAuthenticating = false }
-        do { try await acceptSession(authentication.signInWithMeteor(api: api(), bridgeURL: bridgeURL)) }
+        do {
+            if usesPublicCatalog, let bridgeURL {
+                let accountID = try await authentication.meteorIdentity(bridgeURL: bridgeURL)
+                try await acceptSession(MobileSession(accessToken: "", userID: accountID, kind: "verified-local-wallet"))
+            } else {
+                try await acceptSession(authentication.signInWithMeteor(api: api(), bridgeURL: bridgeURL))
+            }
+        }
         catch AuthenticationError.cancelled {} catch { errorText = error.localizedDescription }
     }
 
@@ -358,12 +393,12 @@ final class AppModel {
         syncDirty = false
         playbackGeneration = UUID()
         guestMergeAvailable = !(guestStore?.snapshot.favorites.isEmpty ?? true) || !(guestStore?.snapshot.playlists.isEmpty ?? true)
-        syncState = .offline
-        await refreshLibrary()
+        syncState = incoming.isLocalWallet ? .local : .offline
+        if cloudSyncEnabled { await refreshLibrary() }
     }
 
     func refreshLibrary() async {
-        guard let userID = account?.userID else { return }
+        guard cloudSyncEnabled, let userID = account?.userID else { return }
         let generation = accountGeneration
         do {
             let remote = try await api().library()
@@ -386,6 +421,7 @@ final class AppModel {
     }
 
     private func requestSync() {
+        guard cloudSyncEnabled else { syncState = .local; return }
         syncDirty = true
         guard !syncRunning else { return }
         Task { await syncLoop() }
@@ -470,31 +506,33 @@ final class AppModel {
             try libraryStore?.mergeGuest(guest)
             libraryRevision += 1
             guestMergeAvailable = false
-            setPending(true)
-            requestSync()
+            if cloudSyncEnabled { setPending(true); requestSync() }
         } catch { errorText = error.localizedDescription }
     }
 
     func logout() async {
         guard account != nil else { return }
         let generation = accountGeneration
-        do { try await api().logout() }
+        do { if cloudSyncEnabled { try await api().logout() } }
         catch {
             guard accountGeneration == generation else { return }
             errorText = "Выход на сервере не подтверждён: \(error.localizedDescription)"
             return
         }
-        if accountGeneration == generation { expireSession() }
+        if accountGeneration == generation { expireSession(showExpired: false) }
     }
 
     func deleteAccount() async {
         guard account != nil else { return }
         let generation = accountGeneration
         do {
-            try await api().deleteAccount()
+            if cloudSyncEnabled { try await api().deleteAccount() }
             guard accountGeneration == generation else { return }
             setPending(false)
             let oldURL = Self.libraryURL(for: account?.userID)
+            if FileManager.default.fileExists(atPath: oldURL.path) {
+                try FileManager.default.removeItem(at: oldURL)
+            }
             SessionKeychain.clear()
             account = nil
             accountGeneration = UUID()
@@ -505,15 +543,14 @@ final class AppModel {
             playbackGeneration = UUID()
             syncDirty = false
             syncState = .local
-            try? FileManager.default.removeItem(at: oldURL)
             noticeText = "Аккаунт и его библиотека удалены."
         } catch {
             guard accountGeneration == generation else { return }
-            errorText = "Удаление не подтверждено сервером: \(error.localizedDescription)"
+            errorText = "Удалить профиль не удалось: \(error.localizedDescription)"
         }
     }
 
-    private func expireSession() {
+    private func expireSession(showExpired: Bool = true) {
         SessionKeychain.clear()
         account = nil
         accountGeneration = UUID()
@@ -524,6 +561,6 @@ final class AppModel {
         playbackGeneration = UUID()
         syncDirty = false
         syncState = .local
-        errorText = "Сессия завершилась. Войдите снова."
+        if showExpired { errorText = "Сессия завершилась. Войдите снова." }
     }
 }
