@@ -73,7 +73,7 @@ final class AudioPlayer {
         pendingFailureSkip = false
         guard current != nil else { return }
         do { try AVAudioSession.sharedInstance().setActive(true) }
-        catch { errorMessage = "Не удалось включить аудио: \(error.localizedDescription)"; return }
+        catch { errorMessage = "Could not start audio: \(error.localizedDescription)"; return }
         player.play()
         isPlaying = true
         updateNowPlaying()
@@ -185,7 +185,7 @@ final class AudioPlayer {
             guard item.status == .failed else { return }
             Task { @MainActor [weak self] in
                 guard self?.player.currentItem === item else { return }
-                self?.errorMessage = item.error?.localizedDescription ?? "Не удалось загрузить песню."
+                self?.errorMessage = item.error?.localizedDescription ?? "Could not load the song."
                 self?.skipUnavailableTrack()
             }
         }
@@ -216,7 +216,7 @@ final class AudioPlayer {
 
     private func configureAudioSession() {
         do { try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default) }
-        catch { errorMessage = "Аудио недоступно: \(error.localizedDescription)" }
+        catch { errorMessage = "Audio is unavailable: \(error.localizedDescription)" }
     }
 
     private func installObservers() {
