@@ -18,7 +18,7 @@ enum AuthenticationError: LocalizedError {
 
 enum SessionKeychain {
     private static let key = "mobile-listener-session"
-    private static let service = "\(Bundle.main.bundleIdentifier ?? "near.fm").listener"
+    private static let service = "\(Bundle.main.bundleIdentifier ?? "com.whendacha.dachafm").listener"
 
     static func load() -> MobileSession? {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
@@ -119,7 +119,7 @@ final class AuthenticationService: NSObject, ASAuthorizationControllerDelegate, 
         components.queryItems = [URLQueryItem(name: "code_challenge", value: challenge), URLQueryItem(name: "state", value: state)]
         guard let url = components.url else { throw AuthenticationError.unconfiguredBridge }
         let callbackURL = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
-            let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "nearfm") { [weak self] callback, error in
+            let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "dachafm") { [weak self] callback, error in
                 Task { @MainActor in self?.webSession = nil }
                 if let error = error as? ASWebAuthenticationSessionError,
                    error.code == .canceledLogin { continuation.resume(throwing: AuthenticationError.cancelled) }
@@ -135,7 +135,7 @@ final class AuthenticationService: NSObject, ASAuthorizationControllerDelegate, 
                 continuation.resume(throwing: AuthenticationError.unconfiguredBridge)
             }
         }
-        guard callbackURL.scheme == "nearfm", callbackURL.host == "auth", callbackURL.path == "/callback",
+        guard callbackURL.scheme == "dachafm", callbackURL.host == "auth", callbackURL.path == "/callback",
               let result = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false),
               result.queryItems?.first(where: { $0.name == "state" })?.value == state,
               let code = result.queryItems?.first(where: { $0.name == "code" })?.value, !code.isEmpty else {
