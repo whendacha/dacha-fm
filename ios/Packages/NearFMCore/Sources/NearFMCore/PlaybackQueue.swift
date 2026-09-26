@@ -50,11 +50,26 @@ public struct PlaybackQueue: Sendable {
 
     public mutating func removeArtist(_ artistID: String) {
         guard self.artistID == nil || self.artistID == artistID else { return }
-        let prior = current?.id
-        tracks.removeAll { $0.artistID == artistID }
-        if tracks.isEmpty { index = 0; self.artistID = nil }
-        else if let prior, let newIndex = tracks.firstIndex(where: { $0.id == prior }) { index = newIndex }
-        else { index = min(index, tracks.count - 1) }
+        removeTracks(Set(tracks.filter { $0.artistID == artistID }.map(\.id)))
+    }
+
+    public mutating func removeTrack(_ trackID: String) {
+        removeTracks([trackID])
+    }
+
+    /// Keep the current song if possible; otherwise advance in the original order.
+    public mutating func removeTracks(_ trackIDs: Set<String>) {
+        guard !trackIDs.isEmpty, !tracks.isEmpty else { return }
+        let survivors = tracks.enumerated().filter { !trackIDs.contains($0.element.id) }
+        guard survivors.count != tracks.count else { return }
+        let next = survivors.first(where: { $0.offset >= index }) ?? survivors.last
+        tracks = survivors.map(\.element)
+        if let next {
+            index = tracks.firstIndex(where: { $0.id == next.element.id }) ?? 0
+        } else {
+            index = 0
+            artistID = nil
+        }
     }
 
     public mutating func shuffle() {

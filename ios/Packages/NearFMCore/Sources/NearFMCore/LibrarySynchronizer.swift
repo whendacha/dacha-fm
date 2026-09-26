@@ -139,5 +139,6 @@ public final class LibrarySynchronizer {
     private static func sameContent(_ lhs: LibrarySnapshot, _ rhs: LibrarySnapshot) -> Bool {
         lhs.favorites == rhs.favorites && lhs.playlists == rhs.playlists
             && Set(lhs.blockedArtistIDs) == Set(rhs.blockedArtistIDs)
+            && lhs.hiddenTracks.sorted { $0.id < $1.id } == rhs.hiddenTracks.sorted { $0.id < $1.id }
     }
 }

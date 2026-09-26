@@ -5,6 +5,7 @@ public enum LibraryStoreError: Error, Equatable {
     case playlistNotFound
     case invalidTrackIndex
     case blockedArtist
+    case hiddenTrack
 }
 
 @MainActor
@@ -43,6 +44,7 @@ public final class LibraryStore {
 
     public func toggleFavorite(_ track: Track) throws {
         try edit { value in
+            guard !value.hiddenTracks.contains(where: { $0.id == track.id }) else { throw LibraryStoreError.hiddenTrack }
             if let index = value.favorites.firstIndex(where: { $0.id == track.id }) {
                 value.favorites.remove(at: index)
             } else {
@@ -77,6 +79,7 @@ public final class LibraryStore {
 
     public func add(_ track: Track, to playlistID: String) throws {
         try edit { value in
+            guard !value.hiddenTracks.contains(where: { $0.id == track.id }) else { throw LibraryStoreError.hiddenTrack }
             guard !value.blockedArtistIDs.contains(track.artistID) else { throw LibraryStoreError.blockedArtist }
             guard let index = value.playlists.firstIndex(where: { $0.id == playlistID }) else { throw LibraryStoreError.playlistNotFound }
             if !value.playlists[index].tracks.contains(where: { $0.id == track.id }) {
@@ -100,6 +103,35 @@ public final class LibraryStore {
             let track = value.playlists[index].tracks.remove(at: source)
             value.playlists[index].tracks.insert(track, at: destination)
         }
+    }
+
+    /// Reorders only visible slots, leaving hidden songs in their saved positions.
+    public func moveVisibleTrack(in playlistID: String, from source: Int, to destination: Int) throws {
+        try edit { value in
+            guard let index = value.playlists.firstIndex(where: { $0.id == playlistID }) else { throw LibraryStoreError.playlistNotFound }
+            let hidden = Set(value.hiddenTracks.map(\.id))
+            let blocked = Set(value.blockedArtistIDs)
+            let slots = value.playlists[index].tracks.indices.filter {
+                let track = value.playlists[index].tracks[$0]
+                return !hidden.contains(track.id) && !blocked.contains(track.artistID)
+            }
+            guard slots.indices.contains(source), slots.indices.contains(destination) else { throw LibraryStoreError.invalidTrackIndex }
+            var visible = slots.map { value.playlists[index].tracks[$0] }
+            let moved = visible.remove(at: source)
+            visible.insert(moved, at: destination)
+            for (slot, track) in zip(slots, visible) { value.playlists[index].tracks[slot] = track }
+        }
+    }
+
+    /// Hiding controls visibility; favorites and playlist membership remain intact.
+    public func hideTrack(_ track: Track) throws {
+        try edit { value in
+            if !value.hiddenTracks.contains(where: { $0.id == track.id }) { value.hiddenTracks.append(track) }
+        }
+    }
+
+    public func unhideTrack(_ trackID: String) throws {
+        try edit { $0.hiddenTracks.removeAll { $0.id == trackID } }
     }
 
     public func blockArtist(_ artistID: String) throws {
@@ -126,7 +158,8 @@ public final class LibraryStore {
     /// Guest stores never call this method and are uploaded only by explicit merge.
     public func enableCloudSync(legacyPending: Bool = false) throws {
         guard !cloudInitialized || legacyPending else { return }
-        let hasContent = !snapshot.favorites.isEmpty || !snapshot.playlists.isEmpty || !snapshot.blockedArtistIDs.isEmpty
+        let hasContent = !snapshot.favorites.isEmpty || !snapshot.playlists.isEmpty
+            || !snapshot.blockedArtistIDs.isEmpty || !snapshot.hiddenTracks.isEmpty
         try commit(snapshot, pending: hasPendingChanges || legacyPending || (!cloudInitialized && hasContent), cloud: true)
     }
 
@@ -149,6 +182,8 @@ public final class LibraryStore {
 
     public func mergeGuest(_ guest: LibrarySnapshot) throws {
         try edit { value in
+            var hiddenIDs = Set(value.hiddenTracks.map(\.id))
+            value.hiddenTracks += guest.hiddenTracks.filter { hiddenIDs.insert($0.id).inserted }
             let blocked = Set(value.blockedArtistIDs)
             var favoriteIDs = Set(value.favorites.map(\.id))
             value.favorites += guest.favorites.filter {
@@ -212,6 +247,9 @@ public final class LibraryStore {
                 !blockedSet.contains($0.artistID) && trackIDs.insert($0.id).inserted
             })
         }
-        return LibrarySnapshot(version: input.version, favorites: favorites, playlists: playlists, blockedArtistIDs: blocked)
+        var hiddenIDs = Set<String>()
+        let hidden = input.hiddenTracks.filter { hiddenIDs.insert($0.id).inserted }
+        return LibrarySnapshot(version: input.version, favorites: favorites, playlists: playlists,
+                               blockedArtistIDs: blocked, hiddenTracks: hidden)
     }
 }

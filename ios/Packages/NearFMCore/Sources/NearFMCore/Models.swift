@@ -66,16 +66,28 @@ public struct LibrarySnapshot: Codable, Equatable, Sendable {
     public var favorites: [Track]
     public var playlists: [Playlist]
     public var blockedArtistIDs: [String]
+    public var hiddenTracks: [Track]
 
-    public init(version: Int, favorites: [Track], playlists: [Playlist], blockedArtistIDs: [String]) {
+    public init(version: Int, favorites: [Track], playlists: [Playlist], blockedArtistIDs: [String], hiddenTracks: [Track] = []) {
         self.version = version
         self.favorites = favorites
         self.playlists = playlists
         self.blockedArtistIDs = blockedArtistIDs
+        self.hiddenTracks = hiddenTracks
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        version = try container.decode(Int.self, forKey: .version)
+        favorites = try container.decode([Track].self, forKey: .favorites)
+        playlists = try container.decode([Playlist].self, forKey: .playlists)
+        blockedArtistIDs = try container.decode([String].self, forKey: .blockedArtistIDs)
+        hiddenTracks = try container.decodeIfPresent([Track].self, forKey: .hiddenTracks) ?? []
     }
 
     enum CodingKeys: String, CodingKey {
         case version, favorites, playlists
         case blockedArtistIDs = "blocked_artist_ids"
+        case hiddenTracks = "hidden_tracks"
     }
 }
