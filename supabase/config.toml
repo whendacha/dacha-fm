@@ -1,0 +1,8 @@
+project_id = "dacha-fm"
+
+[functions.dacha-cloud]
+# Dacha uses its own opaque sessions, not Supabase Auth JWTs. The handler
+# verifies NEP-413 + PKCE before issuance and validates every private request
+# through a hashed, revocable DB session. Config/challenge routes are public.
+# Keep this scoped to this function; it is not a global authentication bypass.
+verify_jwt = false
