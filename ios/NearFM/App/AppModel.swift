@@ -5,7 +5,7 @@ import Observation
 
 @MainActor @Observable
 final class AppModel {
-    enum SyncState: Equatable { case local, syncing, synced, offline, conflict }
+    enum SyncState: Equatable { case local, syncing, synced, offline, conflict, reauthenticationRequired }
 
     private(set) var artists: [Artist] = []
     private(set) var tracks: [Track] = []
@@ -29,6 +29,7 @@ final class AppModel {
     private let authentication = AuthenticationService()
     private let publicCatalog = PublicCatalog()
     private let baseURL = MobileAPI.configuredURL("MobileAPIBaseURL")
+    private let cloudURL = MobileAPI.configuredURL("CloudAPIBaseURL")
     private let bridgeURL = MobileAPI.configuredURL("MeteorBridgeURL")
     private var libraryStore: LibraryStore?
     private var guestStore: LibraryStore?
@@ -44,9 +45,9 @@ final class AppModel {
     private var playbackArtistLoading: [String: UUID] = [:]
     private var playbackArtistIntent: [String: UUID] = [:]
     private var playbackGeneration = UUID()
-    private var syncRunning = false
-    private var syncDirty = false
-    private var remoteConflict: LibrarySnapshot?
+    private var synchronizer: LibrarySynchronizer?
+    private var accountActionInProgress = false
+    private var appliedBlockedIDs: Set<String> = []
     private var accountGeneration = UUID()
     let isDemo: Bool
 
@@ -54,7 +55,13 @@ final class AppModel {
     var isSignedIn: Bool { account != nil }
     var usesPublicCatalog: Bool { baseURL == nil }
     var apiConfigured: Bool { true }
-    var cloudSyncEnabled: Bool { !usesPublicCatalog && account?.isLocalWallet != true }
+    var cloudConfigured: Bool { cloudURL != nil || baseURL != nil }
+    var cloudSyncEnabled: Bool {
+        cloudConfigured && account != nil && account?.isLocalWallet != true && account?.accessToken.isEmpty == false
+    }
+    var needsCloudReauthentication: Bool { account?.isCloudWallet == true && account?.accessToken.isEmpty == true }
+    var canEnableCloud: Bool { cloudURL != nil && account?.isLocalWallet == true }
+    var isChangingAccount: Bool { accountActionInProgress }
     var privacyURL: URL? { config?.privacyURL ?? MobileAPI.configuredURL("PrivacyPolicyURL") }
     var supportURL: URL? { config?.supportURL ?? MobileAPI.configuredURL("SupportURL") }
     var canAppleLogin: Bool { config?.appleEnabled == true }
@@ -68,24 +75,30 @@ final class AppModel {
         #endif
         let directory = Self.storageDirectory()
         let savedAccount = Self.testStoreID == nil ? SessionKeychain.load() : nil
-        let restoredAccount = (MobileAPI.configuredURL("MobileAPIBaseURL") == nil && savedAccount?.isLocalWallet != true) ? nil : savedAccount
+        let restoredAccount = (savedAccount?.isLocalWallet == true || savedAccount?.isCloudWallet == true
+                               || MobileAPI.configuredURL("MobileAPIBaseURL") != nil) ? savedAccount : nil
         player = AudioPlayer(restoreURL: directory.appending(path: "playback.json"), ownerID: restoredAccount?.userID)
         do {
             guestStore = try LibraryStore(fileURL: directory.appending(path: "guest-library.json"))
             account = restoredAccount
             if let userID = restoredAccount?.userID {
                 libraryStore = try LibraryStore(fileURL: Self.libraryURL(for: userID))
+                if restoredAccount?.isLocalWallet != true {
+                    try libraryStore?.enableCloudSync(legacyPending: UserDefaults.standard.bool(forKey: "library-pending-\(userID)"))
+                    UserDefaults.standard.removeObject(forKey: "library-pending-\(userID)")
+                }
                 guestMergeAvailable = !(guestStore?.snapshot.favorites.isEmpty ?? true) || !(guestStore?.snapshot.playlists.isEmpty ?? true)
             } else {
                 libraryStore = guestStore
             }
-            syncState = account == nil || account?.isLocalWallet == true ? .local : .offline
+            syncState = account == nil || account?.isLocalWallet == true ? .local : (needsCloudReauthentication ? .reauthenticationRequired : .offline)
         } catch {
             errorText = "Библиотеку не удалось открыть: \(error.localizedDescription). Данные на диске сохранены."
         }
         player.onNeedMoreArtistTracks = { [weak self] artistID, intentID in
             Task { @MainActor [weak self] in await self?.loadMorePlaybackArtist(artistID, intentID: intentID) }
         }
+        configureSynchronizer()
         Task { await bootstrap() }
     }
 
@@ -121,7 +134,13 @@ final class AppModel {
         return storageDirectory().appending(path: name)
     }
 
-    private func api() -> MobileAPI { MobileAPI(baseURL: baseURL, accessToken: account?.accessToken) }
+    private func api() -> MobileAPI {
+        // A cloud-wallet token never belongs on the separate catalog or legacy service.
+        MobileAPI(baseURL: baseURL, accessToken: account?.kind == nil ? account?.accessToken : nil)
+    }
+    private func cloudAPI(authenticated: Bool = true) -> MobileAPI {
+        MobileAPI(baseURL: cloudURL ?? baseURL, accessToken: authenticated ? account?.accessToken : nil)
+    }
     private func catalogTracks(query: String = "", artistID: String? = nil, page: Int = 1) async throws -> TrackPage {
         if usesPublicCatalog { return try await publicCatalog.tracks(query: query, artistID: artistID, page: page) }
         return try await api().tracks(query: query, artistID: artistID, page: page)
@@ -129,16 +148,6 @@ final class AppModel {
     private func catalogArtists(query: String = "", page: Int = 1) async throws -> ArtistPage {
         if usesPublicCatalog { return try await publicCatalog.artists(query: query, page: page) }
         return try await api().artists(query: query, page: page)
-    }
-
-    private var pendingKey: String? {
-        guard let account else { return nil }
-        return "library-pending-\(account.userID)"
-    }
-    private var hasPendingChanges: Bool { pendingKey.map { UserDefaults.standard.bool(forKey: $0) } ?? false }
-    private func setPending(_ value: Bool) {
-        guard let pendingKey else { return }
-        UserDefaults.standard.set(value, forKey: pendingKey)
     }
 
     private func bootstrap() async {
@@ -162,6 +171,10 @@ final class AppModel {
             catch { errorText = error.localizedDescription }
         }
         await search("")
+        if cloudURL != nil {
+            // Cloud outages must not prevent loading or playing the public catalog.
+            if let cloudConfig = try? await cloudAPI(authenticated: false).config() { config = cloudConfig }
+        }
         if account != nil { await refreshLibrary() }
     }
 
@@ -326,11 +339,12 @@ final class AppModel {
     func isFavorite(_ track: Track) -> Bool { library?.favorites.contains(where: { $0.id == track.id }) == true }
 
     private func editLibrary(_ body: (LibraryStore) throws -> Void) {
+        guard !accountActionInProgress else { return }
         guard let libraryStore else { errorText = "Библиотека недоступна."; return }
         do {
             try body(libraryStore)
             libraryRevision += 1
-            if isSignedIn && cloudSyncEnabled { setPending(true); requestSync() }
+            if isSignedIn && cloudSyncEnabled { requestSync() }
         } catch { errorText = error.localizedDescription }
     }
 
@@ -342,8 +356,11 @@ final class AppModel {
     func remove(_ trackID: String, from playlistID: String) { editLibrary { try $0.remove(trackID: trackID, from: playlistID) } }
     func move(in playlistID: String, from: Int, to: Int) { editLibrary { try $0.moveTrack(in: playlistID, from: from, to: to) } }
     func blockArtist(_ artistID: String) {
+        guard !accountActionInProgress else { return }
         editLibrary { try $0.blockArtist(artistID) }
+        guard blockedIDs.contains(artistID) else { return }
         player.blockArtist(artistID)
+        appliedBlockedIDs.insert(artistID)
         artists.removeAll { $0.id == artistID }
         tracks.removeAll { $0.artistID == artistID }
         selectedArtistTracks.removeAll { $0.artistID == artistID }
@@ -359,6 +376,7 @@ final class AppModel {
     }
 
     func loginWithApple() async {
+        guard !isAuthenticating, !accountActionInProgress else { return }
         guard canAppleLogin else { errorText = "Вход через Apple временно недоступен."; return }
         isAuthenticating = true
         defer { isAuthenticating = false }
@@ -367,11 +385,13 @@ final class AppModel {
     }
 
     func loginWithMeteor() async {
-        guard canMeteorLogin else { errorText = "Вход через Meteor временно недоступен."; return }
+        guard canMeteorLogin, !isAuthenticating, !accountActionInProgress else { return }
         isAuthenticating = true
         defer { isAuthenticating = false }
         do {
-            if usesPublicCatalog, let bridgeURL {
+            if cloudURL != nil {
+                try await acceptSession(authentication.signInWithMeteorCloud(api: cloudAPI(authenticated: false), bridgeURL: bridgeURL))
+            } else if usesPublicCatalog, let bridgeURL {
                 let accountID = try await authentication.meteorIdentity(bridgeURL: bridgeURL)
                 try await acceptSession(MobileSession(accessToken: "", userID: accountID, kind: "verified-local-wallet"))
             } else {
@@ -383,139 +403,118 @@ final class AppModel {
 
     private func acceptSession(_ incoming: MobileSession) async throws {
         let incomingStore = try LibraryStore(fileURL: Self.libraryURL(for: incoming.userID))
+        if !incoming.isLocalWallet {
+            try incomingStore.enableCloudSync(legacyPending: UserDefaults.standard.bool(forKey: "library-pending-\(incoming.userID)"))
+        }
         try SessionKeychain.save(incoming)
+        synchronizer?.invalidate()
         accountGeneration = UUID()
-        remoteConflict = nil
         account = incoming
         libraryStore = incomingStore
         libraryRevision += 1
         player.switchOwner(incoming.userID)
-        syncDirty = false
+        appliedBlockedIDs = []
         playbackGeneration = UUID()
         guestMergeAvailable = !(guestStore?.snapshot.favorites.isEmpty ?? true) || !(guestStore?.snapshot.playlists.isEmpty ?? true)
         syncState = incoming.isLocalWallet ? .local : .offline
+        UserDefaults.standard.removeObject(forKey: "library-pending-\(incoming.userID)")
+        configureSynchronizer()
+        applyLibraryBlocks()
         if cloudSyncEnabled { await refreshLibrary() }
     }
 
-    func refreshLibrary() async {
-        guard cloudSyncEnabled, let userID = account?.userID else { return }
+    private func configureSynchronizer() {
+        synchronizer?.invalidate()
+        synchronizer = nil
+        guard cloudSyncEnabled, let libraryStore else { return }
         let generation = accountGeneration
-        do {
-            let remote = try await api().library()
-            guard account?.userID == userID, accountGeneration == generation else { return }
-            if hasPendingChanges {
-                remoteConflict = remote
-                syncState = .conflict
-            } else {
-                try libraryStore?.replace(remote)
-                libraryRevision += 1
-                syncState = .synced
-            }
-        } catch MobileAPIError.unauthorized {
-            if account?.userID == userID && accountGeneration == generation { expireSession() }
-        } catch {
-            guard account?.userID == userID, accountGeneration == generation else { return }
-            syncState = .offline
-            errorText = error.localizedDescription
-        }
-    }
-
-    private func requestSync() {
-        guard cloudSyncEnabled else { syncState = .local; return }
-        syncDirty = true
-        guard !syncRunning else { return }
-        Task { await syncLoop() }
-    }
-
-    private func syncLoop() async {
-        guard let userID = account?.userID, !syncRunning else { return }
-        let generation = accountGeneration
-        syncRunning = true
-        defer {
-            syncRunning = false
-            if syncDirty && accountGeneration != generation { requestSync() }
-        }
-        while syncDirty {
-            guard account?.userID == userID, accountGeneration == generation else { return }
-            syncDirty = false
-            guard let snapshot = libraryStore?.snapshot else { return }
-            syncState = .syncing
-            do {
-                let saved = try await api().saveLibrary(snapshot)
-                guard account?.userID == userID, accountGeneration == generation else { return }
-                if syncDirty, let latest = libraryStore?.snapshot {
-                    let updated = LibrarySnapshot(version: saved.version, favorites: latest.favorites,
-                                                  playlists: latest.playlists, blockedArtistIDs: latest.blockedArtistIDs)
-                    try libraryStore?.replace(updated)
-                    libraryRevision += 1
-                } else {
-                    try libraryStore?.replace(saved)
-                    libraryRevision += 1
-                    setPending(false)
-                    syncState = .synced
-                }
-            } catch MobileAPIError.conflict {
-                guard account?.userID == userID, accountGeneration == generation else { return }
-                do {
-                    let fetchedConflict = try await api().library()
-                    guard account?.userID == userID, accountGeneration == generation else { return }
-                    remoteConflict = fetchedConflict
-                    syncState = .conflict
-                } catch {
-                    guard account?.userID == userID, accountGeneration == generation else { return }
-                    syncState = .offline
-                    errorText = error.localizedDescription
-                }
-                return
-            } catch MobileAPIError.unauthorized {
-                if account?.userID == userID && accountGeneration == generation { expireSession() }
-                return
-            } catch {
-                guard account?.userID == userID, accountGeneration == generation else { return }
-                syncState = .offline
-                errorText = error.localizedDescription
-                return
+        let coordinator = LibrarySynchronizer(store: libraryStore, remote: cloudAPI())
+        coordinator.onChange = { [weak self, weak coordinator] in
+            guard let self, let coordinator, self.accountGeneration == generation else { return }
+            self.libraryRevision += 1
+            self.applyLibraryBlocks()
+            switch coordinator.state {
+            case .idle: self.syncState = .offline
+            case .syncing: self.syncState = .syncing
+            case .synced: self.syncState = .synced
+            case .offline: self.syncState = .offline
+            case .conflict: self.syncState = .conflict
+            case .reauthenticationRequired:
+                self.requireReauthentication()
             }
         }
+        synchronizer = coordinator
     }
 
-    func resolveConflictUseCloud() {
-        guard let remoteConflict else { return }
-        do { try libraryStore?.replace(remoteConflict); libraryRevision += 1; setPending(false); self.remoteConflict = nil; syncState = .synced }
+    private func requireReauthentication() {
+        guard let account, account.isCloudWallet else { expireSession(); return }
+        // Keep the wallet's local library, including offline edits, available.
+        synchronizer?.invalidate()
+        synchronizer = nil
+        let expired = MobileSession(accessToken: "", userID: account.userID, kind: account.kind)
+        self.account = expired
+        syncState = .reauthenticationRequired
+        do { try SessionKeychain.save(expired) }
         catch { errorText = error.localizedDescription }
     }
 
-    func resolveConflictMerge() {
-        guard let remoteConflict, let current = libraryStore?.snapshot else { return }
-        do {
-            let mergedBlocks = Array(Set(remoteConflict.blockedArtistIDs + current.blockedArtistIDs))
-            let base = LibrarySnapshot(version: remoteConflict.version, favorites: remoteConflict.favorites,
-                                       playlists: remoteConflict.playlists, blockedArtistIDs: mergedBlocks)
-            try libraryStore?.replace(base)
-            try libraryStore?.mergeGuest(current)
-            libraryRevision += 1
-            self.remoteConflict = nil
-            setPending(true)
-            requestSync()
-        } catch { errorText = error.localizedDescription }
+    private func applyLibraryBlocks() {
+        let blocked = blockedIDs
+        for id in blocked.subtracting(appliedBlockedIDs) { player.blockArtist(id) }
+        appliedBlockedIDs = blocked
+        artists.removeAll { blockedIDs.contains($0.id) }
+        tracks.removeAll { blockedIDs.contains($0.artistID) }
+        selectedArtistTracks.removeAll { blockedIDs.contains($0.artistID) }
+    }
+
+    func refreshLibrary() async {
+        guard cloudSyncEnabled, !accountActionInProgress else { return }
+        if synchronizer == nil { configureSynchronizer() }
+        await synchronizer?.synchronize()
+    }
+
+    func sceneBecameActive() async {
+        guard !isDemo, !isAuthenticating else { return }
+        await refreshLibrary()
+    }
+
+    private func requestSync() {
+        guard cloudSyncEnabled, !accountActionInProgress else { return }
+        Task { await refreshLibrary() }
+    }
+
+    func resolveConflictUseCloud() {
+        do { try synchronizer?.useCloud() }
+        catch { errorText = error.localizedDescription }
+    }
+
+    func resolveConflictUseDevice() async {
+        do { try await synchronizer?.useDevice() }
+        catch { errorText = error.localizedDescription }
     }
 
     func mergeGuestLibrary() {
-        guard account != nil, let guest = guestStore?.snapshot else { return }
+        guard account != nil, !accountActionInProgress, let guest = guestStore?.snapshot else { return }
         do {
             try libraryStore?.mergeGuest(guest)
             libraryRevision += 1
             guestMergeAvailable = false
-            if cloudSyncEnabled { setPending(true); requestSync() }
+            if cloudSyncEnabled { requestSync() }
         } catch { errorText = error.localizedDescription }
     }
 
     func logout() async {
-        guard account != nil else { return }
+        guard account != nil, !accountActionInProgress else { return }
+        accountActionInProgress = true
+        defer { accountActionInProgress = false }
         let generation = accountGeneration
-        do { if cloudSyncEnabled { try await api().logout() } }
-        catch {
+        synchronizer?.invalidate()
+        do { if cloudSyncEnabled { try await cloudAPI().logout() } }
+        catch MobileAPIError.unauthorized {
+            // An already expired/revoked token cannot prevent local sign-out.
+        } catch {
             guard accountGeneration == generation else { return }
+            configureSynchronizer()
             errorText = "Выход на сервере не подтверждён: \(error.localizedDescription)"
             return
         }
@@ -523,44 +522,57 @@ final class AppModel {
     }
 
     func deleteAccount() async {
-        guard account != nil else { return }
+        guard let deletingAccount = account, !accountActionInProgress else { return }
+        if deletingAccount.isCloudWallet && !cloudSyncEnabled {
+            errorText = "Войдите через Meteor ещё раз, чтобы удалить облачный профиль и его данные."
+            return
+        }
+        accountActionInProgress = true
+        defer { accountActionInProgress = false }
         let generation = accountGeneration
+        synchronizer?.invalidate()
+        var cloudDeleted = false
         do {
-            if cloudSyncEnabled { try await api().deleteAccount() }
+            if cloudSyncEnabled { try await cloudAPI().deleteAccount(); cloudDeleted = true }
             guard accountGeneration == generation else { return }
-            setPending(false)
-            let oldURL = Self.libraryURL(for: account?.userID)
-            if FileManager.default.fileExists(atPath: oldURL.path) {
-                try FileManager.default.removeItem(at: oldURL)
-            }
-            SessionKeychain.clear()
-            account = nil
-            accountGeneration = UUID()
-            remoteConflict = nil
-            libraryStore = guestStore
-            libraryRevision += 1
-            player.switchOwner(nil)
-            playbackGeneration = UUID()
-            syncDirty = false
-            syncState = .local
+            let oldURL = Self.libraryURL(for: deletingAccount.userID)
+            if FileManager.default.fileExists(atPath: oldURL.path) { try FileManager.default.removeItem(at: oldURL) }
+            UserDefaults.standard.removeObject(forKey: "library-pending-\(deletingAccount.userID)")
+            expireSession(showExpired: false)
             noticeText = "Аккаунт и его библиотека удалены."
+        } catch MobileAPIError.unauthorized {
+            guard accountGeneration == generation else { return }
+            requireReauthentication()
+            errorText = "Срок действия входа истёк. Подтвердите кошелёк через Meteor ещё раз, чтобы удалить облачный профиль. Локальная библиотека сохранена."
         } catch {
             guard accountGeneration == generation else { return }
+            if cloudDeleted {
+                // Server deletion succeeded; allow retrying just the failed local cleanup.
+                let local = MobileSession(accessToken: "", userID: deletingAccount.userID, kind: "verified-local-wallet")
+                account = local
+                try? SessionKeychain.save(local)
+                syncState = .local
+            } else {
+                configureSynchronizer()
+            }
             errorText = "Удалить профиль не удалось: \(error.localizedDescription)"
         }
     }
 
     private func expireSession(showExpired: Bool = true) {
+        synchronizer?.invalidate()
+        synchronizer = nil
         SessionKeychain.clear()
         account = nil
         accountGeneration = UUID()
-        remoteConflict = nil
         libraryStore = guestStore
         libraryRevision += 1
         player.switchOwner(nil)
+        appliedBlockedIDs = []
         playbackGeneration = UUID()
-        syncDirty = false
+        guestMergeAvailable = false
         syncState = .local
+        applyLibraryBlocks()
         if showExpired { errorText = "Сессия завершилась. Войдите снова." }
     }
 }

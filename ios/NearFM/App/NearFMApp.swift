@@ -11,6 +11,7 @@ struct NearFMApp: App {
                 .tint(Theme.accent)
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .background { model.player.checkpoint() }
+                    if phase == .active { Task { await model.sceneBecameActive() } }
                 }
         }
     }
