@@ -30,7 +30,7 @@ Integrations fail closed with 503 when required settings are absent. Config bool
 - `MOBILE_AUTH_DOMAIN`: owned HTTPS application origin used in the signed message.
 - `MOBILE_NEP413_RECIPIENT`: exact expected recipient, normally the owned domain hostname; must match bridge request returned by server.
 - `MOBILE_NEAR_RPC_URL`: trusted HTTPS RPC matching the chosen NEAR network. Ownership requires a full-access Ed25519 key; function-call keys are rejected.
-- `MOBILE_APPLE_CLIENT_ID`: native bundle identifier/audience configured with Sign in with Apple.
+- `MOBILE_APPLE_CLIENT_ID`: native bundle identifier/audience configured with Sign in with Apple; the Dacha FM application uses `com.whendacha.dachafm`.
 - `MOBILE_APPLE_CLIENT_SECRET`: valid Apple ES256 client-secret JWT generated using the developer team's private key. Rotate before expiry; never commit it.
 - `MOBILE_TOKEN_ENCRYPTION_KEY`: base64url without padding encoding of 32 cryptographically random bytes. Encrypts Apple refresh tokens with AES-256-GCM. Back up securely. Rotation requires explicit decrypt/re-encrypt migration; losing this key prevents token revocation.
 - `MOBILE_PRIVACY_URL`, `MOBILE_SUPPORT_URL`: real published HTTPS URLs.
