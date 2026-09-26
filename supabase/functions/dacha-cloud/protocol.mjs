@@ -88,9 +88,9 @@ export function normalizeLibrary(value) {
   requireValue(Array.isArray(value.favorites) && value.favorites.length <= 2000 && Array.isArray(value.playlists) && value.playlists.length <= 100 && Array.isArray(value.blocked_artist_ids) && value.blocked_artist_ids.length <= 1000);
   const blocked = [...new Set(value.blocked_artist_ids.map(x => { requireValue(typeof x === 'string' && /^[0-9]{1,20}$/.test(x)); return x; }))].sort();
   const blockedSet = new Set(blocked);
-  const tracks = items => {
+  const tracks = (items, filterBlockedArtists = true) => {
     requireValue(Array.isArray(items) && items.length <= 2000); const seen = new Set();
-    return items.map(track).filter(x => !blockedSet.has(x.artist_id) && !seen.has(x.id) && seen.add(x.id));
+    return items.map(track).filter(x => (!filterBlockedArtists || !blockedSet.has(x.artist_id)) && !seen.has(x.id) && seen.add(x.id));
   };
   const seen = new Set(); let total = 0;
   const playlists = value.playlists.map(x => {
@@ -99,5 +99,9 @@ export function normalizeLibrary(value) {
     requireValue(Array.isArray(x.tracks)); total += x.tracks.length; requireValue(total <= 10000);
     return { id, name: text(x.name, 100), tracks: tracks(x.tracks) };
   });
-  return { version: value.version, favorites: tracks(value.favorites), playlists, blocked_artist_ids: blocked };
+  const normalized = { version: value.version, favorites: tracks(value.favorites), playlists, blocked_artist_ids: blocked };
+  // Omission means a legacy client cannot edit this field. Preserve that signal
+  // so SQL merges the stored value under its existing account/CAS lock.
+  if (Object.hasOwn(value, 'hidden_tracks')) normalized.hidden_tracks = tracks(value.hidden_tracks, false);
+  return normalized;
 }

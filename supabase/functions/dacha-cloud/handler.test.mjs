@@ -69,3 +69,18 @@ test('untrusted origins and oversized bodies are rejected without leaks',async()
   const huge=await s.handler(new Request(base+'auth/meteor/challenge',{method:'POST',headers:{'Content-Type':'application/json'},body:'x'.repeat(5000)}));assert.equal(huge.status,413);
   assert.equal(r.headers.get('Cache-Control'),'no-store');
 });
+test('HTTP library save forwards hidden tracks but preserves absence in legacy requests',async()=> {
+  const token=b64url(Buffer.alloc(32,9)), writes=[];
+  const handler=createHandler({db:async(name,args)=>{
+    assert.equal(name,'dacha_cloud_library_put');writes.push(args.p_snapshot);
+    return {...args.p_snapshot,version:args.p_snapshot.version+1,hidden_tracks:args.p_snapshot.hidden_tracks??[]};
+  }});
+  const track={id:'d1c6f613-3cec-4348-ac6e-05204634ed41',title:'Song',artist_id:'32',artist_name:'Artist',audio_url:'https://main.fastfs.io/song.mp3',artwork_url:null,duration:15};
+  const put=body=>handler(new Request(base+'library',{method:'PUT',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(body)}));
+  assert.equal((await put({...empty,hidden_tracks:[track]})).status,200);
+  assert.deepEqual(writes[0].hidden_tracks,[track]);
+  assert.equal((await put(empty)).status,200);
+  assert.equal(Object.hasOwn(writes[1],'hidden_tracks'),false);
+  assert.equal((await put({...empty,hidden_tracks:null})).status,400);
+  assert.equal(writes.length,2);
+});

@@ -52,3 +52,27 @@ test('invalid libraries and unsafe URLs cannot enter cloud storage',()=> {
   assert.throws(()=>normalizeLibrary({version:-1,favorites:[],playlists:[],blocked_artist_ids:[]}),HTTPError);
   assert.throws(()=>normalizeLibrary({version:0,favorites:[],playlists:[{id:'p',name:'',tracks:[]}],blocked_artist_ids:[]}),HTTPError);
 });
+test('hidden tracks are validated and deduplicated without removing library memberships',()=> {
+  const value=normalizeLibrary({version:3,favorites:[track],playlists:[{id:'list-1',name:'Evening',tracks:[track]}],blocked_artist_ids:[],hidden_tracks:[track,track]});
+  assert.deepEqual(value.hidden_tracks,[track]);
+  assert.deepEqual(value.favorites,[track]);
+  assert.deepEqual(value.playlists[0].tracks,[track]);
+  assert.deepEqual(normalizeLibrary({...value,hidden_tracks:[]}).hidden_tracks,[]);
+});
+test('legacy omission stays omitted for the locked database merge',()=> {
+  const value=normalizeLibrary({version:2,favorites:[],playlists:[],blocked_artist_ids:[]});
+  assert.equal(Object.hasOwn(value,'hidden_tracks'),false);
+});
+test('hidden tracks retain full metadata independently of hidden-artist filtering',()=> {
+  const value=normalizeLibrary({version:0,favorites:[track],playlists:[{id:'list-1',name:'Evening',tracks:[track]}],blocked_artist_ids:['32'],hidden_tracks:[track]});
+  assert.deepEqual(value.hidden_tracks,[track]);
+  assert.deepEqual(value.favorites,[]);
+  assert.deepEqual(value.playlists[0].tracks,[]);
+});
+test('malformed or excessive hidden tracks cannot enter storage',()=> {
+  const base={version:0,favorites:[],playlists:[],blocked_artist_ids:[]};
+  for(const hidden_tracks of [null,{},[null],[{...track,id:'not-a-uuid'}],[{...track,audio_url:'http://main.fastfs.io/song.mp3'}],[{...track,title:''}],Array(2001).fill(track)]) {
+    assert.throws(()=>normalizeLibrary({...base,hidden_tracks}),HTTPError);
+  }
+  assert.deepEqual(normalizeLibrary({...base,hidden_tracks:Array(2000).fill(track)}).hidden_tracks,[track]);
+});
