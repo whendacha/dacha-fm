@@ -15,6 +15,7 @@ mod config;
 mod db;
 mod feed;
 mod near;
+mod mobile;
 mod rate_limit;
 mod reputation;
 mod routes;
@@ -40,6 +41,11 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
+    let mobile_only = match std::env::var("MOBILE_ONLY").as_deref() {
+        Ok("true") => true,
+        Ok("false") | Err(_) => false,
+        Ok(_) => anyhow::bail!("MOBILE_ONLY must be true or false"),
+    };
     let config = config::Config::from_env();
     tracing::info!(
         "Starting near.fm server (network: {}, contract: {})",
@@ -56,11 +62,13 @@ async fn main() -> anyhow::Result<()> {
     sqlx::migrate!("./migrations").run(&db).await?;
     tracing::info!("Database migrations applied");
 
-    // Start background jobs
-    tokio::spawn(feed::start_feed_scoring_loop(db.clone()));
-    tokio::spawn(reputation::start_reputation_loop(db.clone()));
-    tokio::spawn(validation::revalidate_pending(db.clone()));
-    tokio::spawn(reset_daily_credits_at_midnight(db.clone()));
+    // Listener deployments never start generation, feed, reputation or credit jobs.
+    if !mobile_only {
+        tokio::spawn(feed::start_feed_scoring_loop(db.clone()));
+        tokio::spawn(reputation::start_reputation_loop(db.clone()));
+        tokio::spawn(validation::revalidate_pending(db.clone()));
+        tokio::spawn(reset_daily_credits_at_midnight(db.clone()));
+    }
 
     let suno_client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(600)) // 10 min for Suno generation
@@ -98,6 +106,20 @@ async fn main() -> anyhow::Result<()> {
                 .filter_map(|o| o.parse::<HeaderValue>().ok())
                 .collect::<Vec<_>>(),
         );
+
+    // Dedicated listener deployment: no upstream financial, admin, generation,
+    // cookie/JWT routes or unrelated background work is reachable.
+    if mobile_only {
+        let app = mobile::router()
+            .layer(cors)
+            .layer(TraceLayer::new_for_http())
+            .with_state(state);
+        let addr = format!("{}:{}", config.host, config.port);
+        tracing::info!("Mobile-only listener API on {}", addr);
+        let listener = tokio::net::TcpListener::bind(&addr).await?;
+        axum::serve(listener, app).await?;
+        return Ok(());
+    }
 
     // Rate limiters
     let strict_limiter = rate_limit::strict();
@@ -165,6 +187,7 @@ async fn main() -> anyhow::Result<()> {
     // (handlers call require_auth/require_admin to enforce authentication)
     let app = Router::new()
         // Merge rate-limited routes
+        .merge(mobile::router())
         .merge(strict_routes)
         .merge(moderate_routes)
         // Public stats
