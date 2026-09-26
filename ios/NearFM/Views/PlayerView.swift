@@ -8,7 +8,7 @@ struct MiniPlayer: View {
         if let track = model.player.current {
             HStack(spacing: 12) {
                 Button { model.playerPresented = true } label: { Artwork(url: track.artworkURL, symbol: "music.note", size: 45) }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.plain).accessibilityIdentifier("open-player")
                 Button { model.playerPresented = true } label: {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(track.title).font(.subheadline.weight(.semibold)).lineLimit(1).foregroundStyle(Theme.cream)
@@ -86,7 +86,7 @@ struct PlayerView: View {
                         .tint(Theme.accent)
                         .onChange(of: model.player.elapsed) { _, value in if !seeking { seekValue = value } }
                         HStack {
-                            Text(time(model.player.elapsed))
+                            Text(time(model.player.elapsed)).accessibilityIdentifier("playback-elapsed")
                             Spacer()
                             Text(time(model.player.duration))
                         }.font(.caption.monospacedDigit()).foregroundStyle(Theme.muted)

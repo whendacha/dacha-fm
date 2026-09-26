@@ -84,7 +84,7 @@ struct ListenView: View {
                     EmptyCard(icon: "wifi.slash", title: "Каталог недоступен", detail: "Сервис временно недоступен. Попробуйте позже.")
                 }
 
-                if !model.artists.isEmpty {
+                if !model.artists.isEmpty || model.artistHasMore {
                     VStack(alignment: .leading, spacing: 16) {
                         SectionTitle(title: "Авторы", subtitle: "Один автор — одна очередь")
                         ScrollView(.horizontal, showsIndicators: false) {
@@ -137,7 +137,7 @@ struct ArtistDetailView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("АВТОР").font(.caption.weight(.bold)).tracking(2).foregroundStyle(Theme.accent)
                     Text(artist.name).font(.largeTitle.bold()).foregroundStyle(Theme.cream)
-                    Text("\(artist.trackCount) песен").foregroundStyle(Theme.muted)
+                    Text(artist.trackCount >= 0 ? "\(artist.trackCount) песен" : "Слушать автора").foregroundStyle(Theme.muted)
                 }
                 Button { model.playArtist(artist) } label: {
                     Label("Слушать только этого автора", systemImage: "play.fill")
@@ -157,7 +157,7 @@ struct ArtistDetailView: View {
                 ForEach(model.selectedArtistTracks) { track in
                     TrackRow(model: model, track: track) { model.playArtist(artist, starting: track) }
                 }
-                if model.selectedArtistTracks.isEmpty { EmptyCard(icon: "music.note", title: "Песен нет", detail: "У этого автора пока нет доступных записей.") }
+                if model.selectedArtistTracks.isEmpty { EmptyCard(icon: "music.note", title: model.selectedArtistHasMore ? "Ищем песни автора" : "Песен нет", detail: model.selectedArtistHasMore ? "Можно загрузить следующую страницу каталога." : "У этого автора пока нет доступных записей.") }
                 if model.selectedArtistHasMore && !model.isDemo {
                     Button("Показать ещё") { Task { await model.loadMoreArtistTracks(artistID: artist.id) } }
                         .frame(maxWidth: .infinity).padding(14).background(Theme.surface, in: RoundedRectangle(cornerRadius: 14))
@@ -181,7 +181,7 @@ struct LibraryView: View {
             VStack(alignment: .leading, spacing: 22) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Ваша музыка").font(.system(size: 34, weight: .bold, design: .rounded))
-                    Text(model.isSignedIn ? "Личная библиотека аккаунта" : "Сохранено на этом iPhone")
+                    Text(model.cloudSyncEnabled && model.isSignedIn ? "Личная библиотека аккаунта" : "Сохранено на этом iPhone")
                         .font(.subheadline).foregroundStyle(Theme.muted)
                 }
                 if let library = model.library {
@@ -348,19 +348,36 @@ struct ReportView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Причина жалобы") {
-                    TextField("Опишите проблему", text: $reason, axis: .vertical).lineLimit(3...6)
+                if model.usesPublicCatalog {
+                    Section("Музыка из открытого каталога") {
+                        Text("Жалобы на запись рассматривает площадка, на которой она опубликована. Откройте источник, чтобы отправить обращение.")
+                        if let track, let url = URL(string: "https://near.fm/song/\(track.id)") {
+                            Link("Открыть страницу записи", destination: url)
+                        } else {
+                            Link("Открыть каталог источника", destination: URL(string: "https://near.fm")!)
+                        }
+                        Button("Скрыть автора на этом iPhone") {
+                            if let id = artistID ?? track?.artistID { model.blockArtist(id) }
+                            dismiss()
+                        }
+                    }
+                } else {
+                    Section("Причина жалобы") {
+                        TextField("Опишите проблему", text: $reason, axis: .vertical).lineLimit(3...6)
+                    }
+                    Section { Text("Жалоба попадёт на рассмотрение после подтверждения сервером.").foregroundStyle(Theme.muted) }
                 }
-                Section { Text("Жалоба попадёт на рассмотрение после подтверждения сервером.").foregroundStyle(Theme.muted) }
             }
             .navigationTitle("Пожаловаться").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Закрыть") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
+                    if !model.usesPublicCatalog {
                     Button("Отправить") {
                         sending = true
                         Task { await model.report(track: track, artistID: artistID, reason: reason.trimmingCharacters(in: .whitespacesAndNewlines)); sending = false; if model.noticeText != nil { dismiss() } }
                     }.disabled(reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sending)
+                    }
                 }
             }
         }.tint(Theme.accent)
@@ -391,7 +408,7 @@ struct ArtistCard: View {
         VStack(alignment: .leading, spacing: 10) {
             Artwork(url: artist.artworkURL, symbol: "person.fill", size: 132)
             Text(artist.name).font(.subheadline.weight(.bold)).lineLimit(1).foregroundStyle(Theme.cream)
-            Text("\(artist.trackCount) песен").font(.caption).foregroundStyle(Theme.muted)
+            Text(artist.trackCount >= 0 ? "\(artist.trackCount) песен" : "Слушать автора").font(.caption).foregroundStyle(Theme.muted)
         }.frame(width: 132, alignment: .leading)
     }
 }

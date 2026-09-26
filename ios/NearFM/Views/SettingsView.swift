@@ -32,18 +32,20 @@ struct SettingsView: View {
 
                 if !model.isSignedIn {
                     VStack(alignment: .leading, spacing: 13) {
-                        SectionTitle(title: "Синхронизация", subtitle: "Войдите, чтобы видеть плейлисты на других устройствах")
+                        SectionTitle(title: model.usesPublicCatalog ? "Ваш аккаунт" : "Синхронизация", subtitle: model.usesPublicCatalog ? "Войдите через кошелёк. Библиотека хранится на этом iPhone." : "Войдите, чтобы видеть плейлисты на других устройствах")
+                        if model.canAppleLogin {
                         AppleSignInButton { Task { await model.loginWithApple() } }
                             .frame(height: 52)
                             .disabled(model.isAuthenticating || !model.canAppleLogin)
                             .accessibilityLabel("Войти через Apple")
+                        }
                         Button { Task { await model.loginWithMeteor() } } label: {
                             Label("Войти через Meteor Wallet", systemImage: "sparkles")
                                 .font(.headline).frame(maxWidth: .infinity).padding(16)
                                 .background(Theme.accent, in: RoundedRectangle(cornerRadius: 14)).foregroundStyle(.black)
                         }.disabled(model.isAuthenticating || !model.canMeteorLogin)
                         if model.isAuthenticating { ProgressView("Выполняется вход…").padding(.top, 4) }
-                        if !model.canAppleLogin || !model.canMeteorLogin {
+                        if !model.canMeteorLogin {
                             Text("Некоторые способы входа временно недоступны.")
                                 .font(.caption).foregroundStyle(Theme.muted)
                         }
@@ -52,7 +54,7 @@ struct SettingsView: View {
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 12) {
-                        SectionTitle(title: "Библиотека", subtitle: "Состояние синхронизации")
+                        SectionTitle(title: "Библиотека", subtitle: model.cloudSyncEnabled ? "Состояние синхронизации" : "Сохранено на этом iPhone для вашего аккаунта")
                         if model.guestMergeAvailable {
                             Button { model.mergeGuestLibrary() } label: {
                                 Label("Объединить гостевую библиотеку", systemImage: "square.stack.3d.up")
@@ -114,7 +116,7 @@ struct SettingsView: View {
         } message: { Text("Локальная библиотека гостя будет показана после выхода.") }
         .confirmationDialog("Удалить аккаунт Dacha FM?", isPresented: $deleteConfirmation) {
             Button("Удалить аккаунт", role: .destructive) { Task { await model.deleteAccount() } }
-        } message: { Text("Профиль и синхронизированная библиотека будут удалены после подтверждения сервером.") }
+        } message: { Text(model.cloudSyncEnabled ? "Профиль и синхронизированная библиотека будут удалены после подтверждения сервером." : "Профиль и его библиотека будут удалены с этого iPhone. Кошелёк останется у вас.") }
     }
 
     private var syncLabel: String {
@@ -136,7 +138,7 @@ struct SettingsView: View {
 }
 
 private extension AppModel {
-    var accountLabel: String { "Вход выполнен" }
+    var accountLabel: String { account?.isLocalWallet == true ? (account?.userID ?? "") : "Вход выполнен" }
 }
 
 struct SettingsLink: View {
