@@ -15,6 +15,8 @@ Could you confirm in writing whether Dacha FM may:
 
 Please identify any conditions, API limits, attribution requirements, restrictions or published terms that apply. If you can authorize only part of the catalog, please identify that scope and how we can select the permitted songs and artwork. Please also clarify whether your authorization covers the uploaded content or whether separate creator permission is needed, and which reporting/contact route you want the client to use.
 
+For accurate Apple privacy and age-rating disclosures, please also confirm whether search query text, IP addresses and media requests are retained in production logs, their purposes and retention periods, and whether any data is used for advertising or cross-service tracking. Please explain how reports are handled and objectionable content is filtered, including the availability or frequency of mature lyrics/artwork in the public catalog.
+
 The repository is a GitHub fork of `fastnear/near-fm`, but the shipped native SwiftUI target and separately hosted mobile identity bridge are newly added code; the upstream Rust/web/contract implementation is not compiled into the IPA. I found no explicit license in the upstream repository. If you intend to license that source for use beyond GitHub forking, please point me to the applicable license as a separate matter.
 
 Project: https://github.com/whendacha/dacha-fm  

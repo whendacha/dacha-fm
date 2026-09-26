@@ -1,5 +1,13 @@
 # Dacha FM release status — 26 September 2026
 
+## App Store draft: prepared, not submitted
+
+Build **1.0.0 (4)** is selected for the English App Store draft. Description, support links, review contact details and three authentic iPhone screenshots are saved. Public privacy/support pages now disclose verified hosting logs and provide the authorized support email. Free pricing is configured. The six known privacy categories are configured but remain unpublished because upstream search-request retention is not established.
+
+Apple validation still requires a truthful Content Rights declaration, completed age-rating answers and published privacy information. The documented public API supports programmatic access, but no blanket permission for independent distribution of the catalog/music/artwork was found. The shipped native IPA is separately written Swift code; missing upstream source licensing and catalog authorization are distinct issues. Complete optional Meteor sign-in/sync/reviewer access and moderation evidence remain review checks. **No App Review submission or approval has occurred.**
+
+[Detailed readiness and evidence](app-review-readiness.md) · [Privacy audit](app-privacy-audit.md) · [Permission request draft, not sent](upstream-permission-request.md)
+
 ## Build 4: processed and available in internal TestFlight
 
 Build **1.0.0 (4)** fixes mini-player overlap on pagination and the bottom of library lists, and makes the authored app interface and public help/privacy pages English. Source song titles, artist/account names and user playlist names are preserved. The player occupies its own intrinsic-height row below the navigation stack, keeping pushed destinations clear without a hardcoded player-height estimate.

@@ -1,14 +1,14 @@
 # Dacha FM build 4 App Privacy audit
 
-Audit date: 26 September 2026. Scope: the source and service configuration used by Dacha FM 1.0.0 (4), plus read-only inspection of retained Supabase log fields. This report recommends disclosures; it does not claim that App Store Connect answers have been configured, that the build has been submitted to App Review, or that Apple has approved it.
+Audit date: 26 September 2026. Scope: Dacha FM 1.0.0 (4) source, service configuration and retained Supabase log fields. All six categories below are now configured in the App Store Connect draft, linked to the user, for App Functionality and without tracking; Product Interaction also has Product Personalization. **The declaration is not published**, pending unresolved external search/provider-retention practices. App Review is not submitted.
 
-## Recommended App Store Connect disclosures
+## Configured App Store Connect draft
 
 | Apple category | Evidence and scope | Linked to user | Purpose | Tracking |
 | --- | --- | --- | --- | --- |
 | User ID | Public wallet account ID and account-linked session identifiers | Yes | App Functionality | No |
 | Other User Content | Cloud playlist names, track selections and their order, personal library | Yes | App Functionality | No |
-| Product Interaction | Cloud favorites and hidden-artist preferences; classification of stored music choices | Yes | App Functionality; Product Personalization also describes filtering the user's catalog by their hidden-artist choices | No |
+| Product Interaction | Cloud favorites and hidden-artist preferences | Yes | App Functionality; Product Personalization | No |
 | Coarse Location | Supabase gateway retains city and country derived from IP | Yes | App Functionality, including security | No |
 | Other Diagnostic Data | Retained IP, HTTP request metadata, user-agent, status codes and security network fingerprints | Yes | App Functionality, including service operation and security | No |
 | Performance Data | Retained function request execution durations | Yes | App Functionality | No |
@@ -52,12 +52,12 @@ This is evidence of infrastructure retention even though the application handler
 
 The cloud account and library remain until deletion. Sessions expire after 30 days; challenges expire after five minutes. Expired records are cleaned in bounded batches during later sign-in requests. Server account deletion removes the library and all sessions. Local copies on other devices can remain until removed there, and hosting-provider logs/backups follow separate retention policies. No unverified retention period is asserted.
 
-The build 4 `ios/NearFM/Resources/PrivacyInfo.xcprivacy` declares User ID and Other User Content only, with App Functionality, linked data and no tracking. The provider metadata and additional categories above are a disclosure-alignment gap to review in App Store Connect and the next binary manifest. The public privacy page has been clarified by this audit. Neither the binary manifest nor App Store Connect was changed as part of this audit.
+The build 4 `ios/NearFM/Resources/PrivacyInfo.xcprivacy` still declares User ID and Other User Content only. The six-category ASC draft now reflects the known additional data; align any subsequent binary manifest with established practices. Public privacy and support pages are deployed, and their bytes retrieved with curl match the local files. The binary manifest was not changed in this documentation update.
 
 Required-reason API declaration `NSPrivacyAccessedAPICategoryUserDefaults` / `CA92.1` matches the observed app-owned UserDefaults usage. The native app depends on Apple frameworks and its local Swift package; no native third-party analytics SDK was found.
 
 ## Unresolved external-retention questions
 
-The external catalog receives search strings; external media hosts receive requested song/image paths. Their live request-log retention was not verified. Do not assert that Search History or externally observed music access is never collected. Resolve the providers' actual practices before making a definitive negative disclosure. This audit establishes neither permission to redistribute catalog content nor a music-content license.
+The external catalog receives search strings; external media hosts receive song/image paths. Upstream `server/src/main.rs` installs `TraceLayer::new_for_http()` and defaults `tower_http` logging to DEBUG. At that level full request URIs, including `q`, can appear in logs. The production log level and retention were not verified, so this is evidence of possible search logging, not proof of the live configuration. Do not assert that Search History or externally observed music access is never collected. Resolve those practices before publishing a definitive privacy declaration. This audit establishes neither catalog authorization nor a music-content license.
 
 No evidence was found in the reviewed native app of contact access, GPS access, microphone recording, user audio uploads, payment collection, IDFA use or app crash analytics. Data processed exclusively on the device, including the guest library and playback position, is separate from collected cloud data.
