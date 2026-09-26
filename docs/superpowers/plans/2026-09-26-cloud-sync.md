@@ -40,7 +40,9 @@
 
 - [x] Update privacy/support and release instructions to describe cloud data and deletion.
 - [x] Run core, bridge, Edge, live service and iOS UI checks; verify archive source hashes and compiled cloud URL.
-- [ ] Publish source/bridge, archive and upload `1.0.0 (3)`, then verify Apple's processed build and group assignment.
+- [x] Publish the cloud-aware bridge, archive and upload `1.0.0 (3)`; Apple accepted the package at `2026-09-26T07:34:11Z`.
+- [x] Publish the final source/documentation updates.
+- [x] Verify Apple's completed processing and assign build 3 to the existing internal TestFlight group with one invited tester; save Russian testing instructions.
 - [x] Record the evidence and clearly distinguish tested cloud operations from real-wallet approval.
 
-**Delivery checkpoint:** Source and deployed cloud are verified; build 3 archive passed. Export/upload waits for normal Xcode Apple Developer sign-in because Xcode reports `No Accounts`. No build 3 delivery is claimed.
+**Delivery checkpoint:** Source, deployed cloud and simulator UI checks are verified. Build 3 archive/export/upload succeeded; Apple accepted `1.0.0 (3)` at **10:34:11 MSK (07:34:11 UTC) on 26 September 2026**. Apple processing is complete, the build is assigned to the existing internal TestFlight group with one invited tester, and Russian testing instructions are saved. Real wallet approval and signed return on a physical iPhone remain unverified; no App Review submission or approval is claimed.
