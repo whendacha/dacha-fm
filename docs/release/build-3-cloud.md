@@ -2,7 +2,7 @@
 
 Build 3 adds optional synchronization of favorites, playlists and hidden authors through the same verified Meteor account on each device. Guest listening and the public streaming catalog remain available without an account. Music requests continue to use the separate public adapter; cloud credentials and library contents are not sent to the catalog source.
 
-The configured cloud base is `https://clxaqzlecqiypyiwgkxd.supabase.co/functions/v1/dacha-cloud`. The Dacha database migration has been applied to that project and Edge function version 1 has been deployed. This records deployment of the service, not successful real-wallet sign-in or Apple delivery of build 3.
+The configured cloud base is `https://clxaqzlecqiypyiwgkxd.supabase.co/functions/v1/dacha-cloud`. The Dacha database migration has been applied to that project and Edge function version 1 has been deployed. Apple accepted the **1.0.0 (3)** upload at **10:34:11 MSK (07:34:11 UTC) on 26 September 2026**, completed processing, and the build is assigned to the existing internal TestFlight group with one invited tester. Russian testing instructions are saved. No completed real-wallet sign-in is claimed.
 
 ## Listener behavior
 
@@ -25,7 +25,9 @@ The configured cloud base is `https://clxaqzlecqiypyiwgkxd.supabase.co/functions
 | Supabase security advisors | Zero security lints reported after deployment |
 | Build 3 simulator UI | 3/3 passed: guest library and author queue, live audio at 0:05, and cloud Meteor flow reaching the real wallet screen |
 | Real Meteor approval and signed return | Not verified on a physical iPhone; no completed live wallet login claimed |
-| Apple delivery | Build 3 Release archive passed; export is blocked by Xcode reporting No Accounts. Build 3 has not been uploaded; build 2 remains the last confirmed TestFlight delivery |
+| Apple upload | Build 3 archive/export/upload succeeded; Apple accepted the package at `2026-09-26T07:34:11Z` |
+| Exported IPA | Version `1.0.0 (3)` and ZIP integrity confirmed; SHA-256 `b40f2fc60ab7fc73354f38b6e5171c0fdd587661d072caae5f62487d4843f2f8` |
+| TestFlight availability | Processing completed; build 3 assigned to the existing internal group with one invited tester; Russian “What to Test” instructions saved |
 
 The DB suite checks service-only permissions, forced RLS, challenge expiry and single use, account isolation, invalid snapshots, compare-and-swap conflicts, deletion/logout races, session expiry, rate limits and cleanup. Live HTTPS checks covered favorites/playlists across sessions, rename/removal/deletion, hidden authors, version-conflict 409 responses, account isolation, current-session logout and all-session revocation after account deletion. All temporary test account/session rows were confirmed removed. Those sessions were seeded specifically for verification; neither they nor generated signature fixtures replace a real mainnet wallet confirmation. No music download or wallet transaction is needed for these automated checks.
 
@@ -33,6 +35,6 @@ The DB suite checks service-only permissions, forced RLS, challenge expiry and s
 
 Complete a real cloud sign-in, make a favorite and playlist on one device, and verify them after signing in with the same wallet on another. Edit while offline, relaunch, then retry synchronization. Make conflicting edits on both devices and verify each explicit version choice. Check logout, expired-session reauthentication and deletion from one device with the other still signed in. Confirm that guest data and another wallet's library remain separate.
 
-Re-run the deployed bridge checksum and public endpoint checks, then record the build 3 simulator/device results and Apple's actual upload/processing receipt in [release status](status.md). This note does not claim App Review submission or approval.
+The deployed bridge checksum, public endpoint checks and three simulator UI tests have passed. Apple's completed processing and build 3 group assignment are recorded in [release status](status.md). Add the physical-device acceptance results after testing. This note does not claim App Review submission or approval.
 
 Implementation and commands: [iOS README](../../ios/README.md), [Supabase README](../../supabase/README.md), [database contract](../../supabase/DB_CONTRACT.md), [bridge README](../../mobile-bridge/README.md).
