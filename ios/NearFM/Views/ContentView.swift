@@ -27,7 +27,7 @@ struct ContentView: View {
                 .tabItem { Label("Настройки", systemImage: "slider.horizontal.3") }.tag(2)
         }
         .sheet(isPresented: $model.playerPresented) { PlayerView(model: model) }
-        .alert("Near.fm", isPresented: Binding(get: { model.errorText != nil }, set: { if !$0 { model.errorText = nil } })) {
+        .alert("Dacha FM", isPresented: Binding(get: { model.errorText != nil }, set: { if !$0 { model.errorText = nil } })) {
             Button("Понятно", role: .cancel) { model.errorText = nil }
         } message: { Text(model.errorText ?? "") }
         .alert("Готово", isPresented: Binding(get: { model.noticeText != nil }, set: { if !$0 { model.noticeText = nil } })) {
@@ -50,7 +50,7 @@ struct ListenView: View {
                     HStack {
                         Image(systemName: "waveform.path")
                             .font(.title2.weight(.bold)).foregroundStyle(Theme.accent)
-                        Text("NEAR.FM").font(.caption.weight(.black)).tracking(3).foregroundStyle(Theme.cream)
+                        Text("DACHA FM").font(.caption.weight(.black)).tracking(3).foregroundStyle(Theme.cream)
                         Spacer()
                         if model.isDemo { Text("ДЕМО").font(.caption2.weight(.bold)).padding(.horizontal, 10).padding(.vertical, 5).background(Theme.accent, in: Capsule()).foregroundStyle(.black) }
                     }

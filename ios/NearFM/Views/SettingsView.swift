@@ -17,7 +17,7 @@ struct SettingsView: View {
                         Image(systemName: model.isSignedIn ? "person.crop.circle.fill" : "iphone.gen3")
                             .font(.title).foregroundStyle(Theme.accent)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(model.isSignedIn ? "Аккаунт Near.fm" : "Гость")
+                            Text(model.isSignedIn ? "Аккаунт Dacha FM" : "Гость")
                                 .font(.headline).foregroundStyle(Theme.cream)
                             Text(model.isSignedIn ? (model.accountLabel) : "Библиотека хранится на iPhone")
                                 .font(.caption).foregroundStyle(Theme.muted).lineLimit(1)
@@ -38,7 +38,7 @@ struct SettingsView: View {
                             .disabled(model.isAuthenticating || !model.canAppleLogin)
                             .accessibilityLabel("Войти через Apple")
                         Button { Task { await model.loginWithMeteor() } } label: {
-                            Label("Войти через Meteor", systemImage: "sparkles")
+                            Label("Войти через Meteor Wallet", systemImage: "sparkles")
                                 .font(.headline).frame(maxWidth: .infinity).padding(16)
                                 .background(Theme.accent, in: RoundedRectangle(cornerRadius: 14)).foregroundStyle(.black)
                         }.disabled(model.isAuthenticating || !model.canMeteorLogin)
@@ -80,7 +80,7 @@ struct SettingsView: View {
                         Button("Удалить аккаунт", role: .destructive) { deleteConfirmation = true }
                             .frame(maxWidth: .infinity, alignment: .leading).padding(15)
                             .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14))
-                        Text("Удаление стирает профиль Near.fm и личную библиотеку. Кошелёк Meteor и данные блокчейна остаются у вас.")
+                        Text("Удаление стирает профиль Dacha FM и личную библиотеку. Кошелёк Meteor и данные блокчейна остаются у вас.")
                             .font(.caption).foregroundStyle(Theme.muted)
                     }
                 }
@@ -112,7 +112,7 @@ struct SettingsView: View {
         .confirmationDialog("Выйти из аккаунта?", isPresented: $logoutConfirmation) {
             Button("Выйти") { Task { await model.logout() } }
         } message: { Text("Локальная библиотека гостя будет показана после выхода.") }
-        .confirmationDialog("Удалить аккаунт Near.fm?", isPresented: $deleteConfirmation) {
+        .confirmationDialog("Удалить аккаунт Dacha FM?", isPresented: $deleteConfirmation) {
             Button("Удалить аккаунт", role: .destructive) { Task { await model.deleteAccount() } }
         } message: { Text("Профиль и синхронизированная библиотека будут удалены после подтверждения сервером.") }
     }
