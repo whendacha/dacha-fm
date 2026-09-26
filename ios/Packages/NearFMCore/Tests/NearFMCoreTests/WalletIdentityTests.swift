@@ -7,9 +7,9 @@ final class WalletIdentityTests: XCTestCase {
     private let issuedAt = Date(timeIntervalSince1970: 1_800_000_000)
     private let privateKey = try! Curve25519.Signing.PrivateKey(rawRepresentation: Data(0..<32))
 
-    private func challenge(nonce: Data = Data(0..<32), recipient: String = "dacha.example") throws -> WalletIdentityChallenge {
+    private func challenge(nonce: Data = Data(0..<32), recipient: String = "dacha.example", scope: WalletIdentityChallenge.Scope = .local) throws -> WalletIdentityChallenge {
         try WalletIdentityChallenge(bridgeURL: URL(string: "https://\(recipient)")!, nonce: nonce,
-                                    state: String(repeating: "A", count: 43), issuedAt: issuedAt)
+                                    state: String(repeating: "A", count: 43), issuedAt: issuedAt, scope: scope)
     }
 
     // Independent NEP-413 payload construction: u32 tag, Borsh strings,
@@ -17,7 +17,7 @@ final class WalletIdentityTests: XCTestCase {
     private func signedCallback(_ challenge: WalletIdentityChallenge, message: String? = nil,
                                 state: String? = nil, signature: String? = nil) throws -> URL {
         var bytes = Data([0x9d, 0x01, 0x00, 0x80])
-        for (index, field) in [Data((message ?? WalletIdentityChallenge.message).utf8), challenge.nonce, Data(challenge.recipient.utf8)].enumerated() {
+        for (index, field) in [Data((message ?? challenge.signingMessage).utf8), challenge.nonce, Data(challenge.recipient.utf8)].enumerated() {
             if index != 1 {
                 let n = UInt32(field.count)
                 bytes.append(contentsOf: [UInt8(n & 255), UInt8((n >> 8) & 255), UInt8((n >> 16) & 255), UInt8((n >> 24) & 255)])
@@ -57,6 +57,39 @@ final class WalletIdentityTests: XCTestCase {
         XCTAssertThrowsError(try challenge(nonce: Data(repeating: 7, count: 32)).verify(callbackURL: callback, now: issuedAt))
         XCTAssertThrowsError(try challenge(recipient: "attacker.example").verify(callbackURL: callback, now: issuedAt))
         XCTAssertThrowsError(try original.verify(callbackURL: signedCallback(original, message: "different message"), now: issuedAt))
+    }
+
+    func testCloudAndLocalProofsCannotBeSubstitutedEvenWithSameNonceAndState() throws {
+        let local = try challenge()
+        let cloud = try challenge(scope: .cloud)
+        XCTAssertEqual(cloud.signingMessage, "Dacha FM cloud sign-in\nSign in to sync your favorites and playlists across your devices. No transaction or wallet permission is requested.")
+        let url = try cloud.authorizationURL()
+        XCTAssertEqual(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "message" }?.value, WalletIdentityChallenge.cloudMessage)
+        let cloudCallback = try signedCallback(cloud)
+        let proof = try cloud.verify(callbackURL: cloudCallback, now: issuedAt)
+        XCTAssertEqual(Data(base64Encoded: proof.signature)?.count, 64)
+        XCTAssertThrowsError(try local.verify(callbackURL: cloudCallback, now: issuedAt))
+        XCTAssertThrowsError(try cloud.verify(callbackURL: signedCallback(local), now: issuedAt))
+    }
+
+    func testCloudChallengeHonorsEarlierServerExpiry() throws {
+        let c = try WalletIdentityChallenge(bridgeURL: URL(string: "https://dacha.example")!, nonce: Data(0..<32),
+                                            state: String(repeating: "A", count: 43), issuedAt: issuedAt,
+                                            scope: .cloud, expiresAt: issuedAt.addingTimeInterval(90))
+        XCTAssertNoThrow(try c.verify(callbackURL: signedCallback(c), now: issuedAt.addingTimeInterval(30)))
+        XCTAssertThrowsError(try c.verify(callbackURL: signedCallback(c), now: issuedAt.addingTimeInterval(91)))
+        XCTAssertThrowsError(try WalletIdentityChallenge(bridgeURL: URL(string: "https://dacha.example")!, nonce: Data(0..<32),
+                                                          state: c.state, issuedAt: issuedAt, scope: .cloud, expiresAt: issuedAt.addingTimeInterval(-1)))
+    }
+
+    func testCloudProofMatchesIndependentNodeCryptoVector() throws {
+        // Independently serialized with Node Buffer + node:crypto Ed25519.
+        // Public test seed 00...1f, never a real wallet key.
+        let c = try challenge(recipient: "whendacha.github.io", scope: .cloud)
+        let signature = "ainyqYZSvwUW5UU8TAtMf/9qYI7GdQcCEpycmPP7MpwpTvp58Og2O3LwhxXUiILLy6mfaSvqmZo/YopxVgcDBg=="
+        let proof = try c.verify(callbackURL: signedCallback(c, signature: signature), now: issuedAt)
+        XCTAssertEqual(proof.publicKey, "ed25519:FAe4sisG95oZ42w7buUn5qEE4TAnfTTFPiguZUHmhiF")
+        XCTAssertEqual(proof.signature, signature)
     }
 
     func testStateExpiryAndDuplicateParametersFailClosed() throws {
