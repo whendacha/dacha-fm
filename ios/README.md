@@ -1,6 +1,6 @@
-# Near FM for iPhone
+# Dacha FM for iPhone
 
-Native SwiftUI listener for iOS 17+, developed in the [whendacha fork](https://github.com/whendacha/near-fm). Features include author-only queues, playlists, favorites, a persistent guest library, AVPlayer/lock-screen controls, optional Meteor or Apple login, account-scoped synchronization, reporting, blocking, and account deletion.
+Native SwiftUI listener for iOS 17+, developed in the [whendacha fork](https://github.com/whendacha/dacha-fm). Features include author-only queues, playlists, favorites, a persistent guest library, AVPlayer/lock-screen controls, optional Meteor or Apple login, account-scoped synchronization, reporting, blocking, and account deletion.
 
 This repository contains an implementation and development builds. It is **not an App Store submission**. Live provider/device verification, a production catalog/backend, distribution rights and signing remain release requirements; see [release status](../docs/release/status.md).
 
@@ -50,7 +50,7 @@ Deploy the Rust backend with `MOBILE_ONLY=true` using [the configuration and mod
 
 For the Next.js bridge, configure server-side `MOBILE_API_URL` to the API origin and `MOBILE_NEAR_NETWORK=mainnet` or `testnet`. The route `/mobile/auth` performs NEP-413 signing through Meteor and returns a one-time PKCE code to the app. A physical iPhone test of Meteor's popup and return flow is still required.
 
-Register `com.whendacha.nearfm` (or an owned replacement bundle ID) with Sign in with Apple in the intended Apple team. Configure the matching backend audience, Apple client secret and token-encryption key. Changing the bundle ID also requires updating the backend audience and project settings. The callback scheme is `nearfm`; it uses random state and PKCE. Apple and Meteor identities are independent accounts in this version; linking is not implemented. Sessions expire after 30 days and require another login.
+Register `com.whendacha.dachafm` (or an owned replacement bundle ID) with Sign in with Apple in the intended Apple team. Configure the matching backend audience, Apple client secret and token-encryption key. Changing the bundle ID also requires updating the backend audience and project settings. The callback scheme is `dachafm`; it uses random state and PKCE. Apple and Meteor identities are independent accounts in this version; linking is not implemented. Sessions expire after 30 days and require another login.
 
 ## Archive and upload
 
@@ -59,7 +59,7 @@ With the production settings and a valid Apple Developer account configured:
 ```sh
 xcodebuild -project ios/NearFM.xcodeproj -scheme NearFM \
   -configuration Release -destination 'generic/platform=iOS' \
-  -archivePath ios/build/NearFM.xcarchive \
+  -archivePath ios/build/DachaFM.xcarchive \
   -allowProvisioningUpdates archive
 ```
 
