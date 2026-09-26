@@ -16,7 +16,7 @@ test("accepts only one well-shaped PKCE challenge and state", () => {
 });
 
 test("challenge requires 32-byte nonce and a future expiry", () => {
-  const challenge = { id: "63c5d451-22ae-4d99-884a-32644c233284", message: "Sign in", nonce: Array(32).fill(0), recipient: "near.fm", expires_at: new Date(Date.now() + 60_000).toISOString() };
+  const challenge = { id: "63c5d451-22ae-4d99-884a-32644c233284", message: "Sign in", nonce: Array(32).fill(0), recipient: "listener.example", expires_at: new Date(Date.now() + 60_000).toISOString() };
   assert.deepEqual(parseChallenge(challenge), challenge);
   assert.equal(parseChallenge({ ...challenge, nonce: [1] }), null);
   assert.equal(parseChallenge({ ...challenge, expires_at: new Date(Date.now() - 1).toISOString() }), null);
@@ -24,7 +24,7 @@ test("challenge requires 32-byte nonce and a future expiry", () => {
 
 test("callback has fixed destination and only code plus state", () => {
   const callback = callbackURL(token, token);
-  assert.equal(callback, `nearfm://auth/callback?code=${token}&state=${token}`);
+  assert.equal(callback, `dachafm://auth/callback?code=${token}&state=${token}`);
   assert.equal(callbackURL("invalid", token), null);
   assert.equal(callbackURL(token, "https://evil.example"), null);
 });

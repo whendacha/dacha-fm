@@ -119,9 +119,9 @@ export function MeteorBridge({ network, configured }: { network: "mainnet" | "te
 
   return <div className="min-h-screen bg-[#0e0e15] text-white px-5 py-14 flex items-center justify-center">
     <section className="w-full max-w-md rounded-3xl border border-white/10 bg-[#1a1a27] p-7 shadow-2xl" aria-live="polite">
-      <div className="text-sm font-semibold tracking-[0.2em] text-violet-300">NEAR.FM</div>
-      <h1 className="mt-6 text-3xl font-bold">Sign in with Meteor</h1>
-      <p className="mt-4 leading-7 text-white/70">Confirm your NEAR account for your private listener library. Meteor will ask you to sign one identity message. This does not send funds or request contract access.</p>
+      <div className="text-sm font-semibold tracking-[0.2em] text-violet-300">DACHA FM</div>
+      <h1 className="mt-6 text-3xl font-bold">Sign in with Meteor Wallet</h1>
+      <p className="mt-4 leading-7 text-white/70">Confirm your Meteor Wallet account for your private listener library. Meteor will ask you to sign one identity message. This does not send funds or request contract access.</p>
       <p className="mt-6 min-h-12 text-sm leading-6 text-white/80" role="status">{detail}</p>
       {phase === "ready" || phase === "error" ? <button type="button" onClick={prepare} disabled={!input || !configured} className="mt-5 w-full rounded-xl bg-violet-500 px-5 py-3 font-semibold text-white hover:bg-violet-400 disabled:opacity-40">Prepare Meteor sign-in</button> : null}
       {phase === "prepared" ? <button type="button" onClick={sign} className="mt-5 w-full rounded-xl bg-violet-500 px-5 py-3 font-semibold text-white hover:bg-violet-400">Confirm identity in Meteor</button> : null}

@@ -31,7 +31,7 @@ export function parseChallenge(value: unknown): Challenge | null {
 
 export function callbackURL(code: string, state: string): string | null {
   if (!base64url32.test(code) || !base64url32.test(state)) return null;
-  const url = new URL("nearfm://auth/callback");
+  const url = new URL("dachafm://auth/callback");
   url.searchParams.set("code", code);
   url.searchParams.set("state", state);
   return url.toString();
