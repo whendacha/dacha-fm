@@ -1,0 +1,21 @@
+2026-09-26 local verification; PostgreSQL TEST_DATABASE_URL configured
+running 10 tests
+test mobile::tests::challenge_expiry ... ok
+test mobile::tests::library_validation ... ok
+test mobile::tests::pagination_bounds ... ok
+test mobile::tests::pkce_rfc_vector ... ok
+test mobile::tests::malformed_and_oversized_inputs_are_rejected ... ok
+test mobile::apple::tests::encrypted_tokens_authenticate ... ok
+test mobile::tests::nep413_binds_recipient_nonce_and_callback ... ok
+test mobile::tests::database_challenge_and_code_consume_once ... ok
+test mobile::tests::database_session_revocation_and_library_conflicts ... ok
+test mobile::tests::database_catalog_requires_independent_approval_and_visibility ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+
+HTTP smoke: PASS catalog gate, pagination, artist count, auth, canonical metadata, version conflict, owner isolation, blocks, persisted guest reports, disabled integration behavior, account deletion and logout.
+HTTP exchange race: PASS wrong verifier 401; concurrent valid exchanges exactly [200,401]; replay 401.
+No live Apple/Meteor authorization or production deployment performed.
+
+MOBILE_ONLY=true rebuilt and same HTTP suites passed. Wallet/admin/legacy-auth route probes: 404. 1.1 MB report: 413. No upstream background jobs in this mode.
