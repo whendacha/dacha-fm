@@ -1,6 +1,7 @@
 import AuthenticationServices
 import CryptoKit
 import Foundation
+import NearFMCore
 import Security
 import UIKit
 
@@ -105,6 +106,41 @@ final class AuthenticationService: NSObject, ASAuthorizationControllerDelegate, 
 
     private func anchor() -> ASPresentationAnchor {
         UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow } ?? UIWindow()
+    }
+
+    /// Verifies a Meteor identity for the device's local library only.
+    /// No backend session or cloud account is created by this flow.
+    func meteorIdentity(bridgeURL: URL) async throws -> String {
+        guard webSession == nil else { throw AuthenticationError.invalidCallback }
+        var nonce = [UInt8](repeating: 0, count: 32)
+        guard SecRandomCopyBytes(kSecRandomDefault, nonce.count, &nonce) == errSecSuccess else {
+            throw AuthenticationError.invalidCallback
+        }
+        let challenge = try WalletIdentityChallenge(bridgeURL: bridgeURL, nonce: Data(nonce), state: Self.randomURLSafeString())
+        let url = try challenge.authorizationURL()
+        let callback = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
+            let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "dachafm") { [weak self] callback, error in
+                Task { @MainActor in self?.webSession = nil }
+                if let error = error as? ASWebAuthenticationSessionError, error.code == .canceledLogin {
+                    continuation.resume(throwing: AuthenticationError.cancelled)
+                } else if let error {
+                    continuation.resume(throwing: error)
+                } else if let callback {
+                    continuation.resume(returning: callback)
+                } else {
+                    continuation.resume(throwing: AuthenticationError.invalidCallback)
+                }
+            }
+            session.presentationContextProvider = self
+            // Allow an existing Meteor browser session to be reused on this device.
+            session.prefersEphemeralWebBrowserSession = false
+            webSession = session
+            if !session.start() {
+                webSession = nil
+                continuation.resume(throwing: AuthenticationError.unconfiguredBridge)
+            }
+        }
+        return try await WalletIdentityVerification.accountID(callback: callback, challenge: challenge)
     }
 
     func signInWithMeteor(api: MobileAPI, bridgeURL: URL?) async throws -> MobileSession {

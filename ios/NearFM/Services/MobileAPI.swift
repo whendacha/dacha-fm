@@ -29,7 +29,9 @@ struct MobileConfig: Decodable {
 struct MobileSession: Codable {
     let accessToken: String
     let userID: String
-    enum CodingKeys: String, CodingKey { case accessToken = "access_token", userID = "user_id" }
+    var kind: String? = nil
+    var isLocalWallet: Bool { kind == "verified-local-wallet" }
+    enum CodingKeys: String, CodingKey { case accessToken = "access_token", userID = "user_id", kind }
 }
 
 enum MobileAPIError: LocalizedError {
