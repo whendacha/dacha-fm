@@ -1,0 +1,6 @@
+// No production service is assumed. Run release_preflight.py before distribution.
+MOBILE_API_BASE_URL =
+METEOR_BRIDGE_URL =
+PRIVACY_POLICY_URL =
+SUPPORT_URL =
+#include? "Local.xcconfig"

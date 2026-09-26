@@ -1,0 +1,6 @@
+// Local.xcconfig is git-ignored. Configure the owned mobile backend there.
+MOBILE_API_BASE_URL =
+METEOR_BRIDGE_URL =
+PRIVACY_POLICY_URL =
+SUPPORT_URL =
+#include? "Local.xcconfig"
