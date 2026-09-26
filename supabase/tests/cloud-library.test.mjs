@@ -39,6 +39,8 @@ async function waitUntilBlocked(pid) {
 
 const token = () => randomBytes(32).toString("hex");
 const empty = (version = 0) => ({ version, favorites: [], playlists: [], blocked_artist_ids: [] });
+const completeEmpty = (version = 0) => ({ ...empty(version), hidden_tracks: [] });
+const hiddenTrack = { id: 'd1c6f613-3cec-4348-ac6e-05204634ed41', title: 'Song', artist_id: '32', artist_name: 'Artist', audio_url: 'https://main.fastfs.io/song.mp3', artwork_url: null, duration: 15 };
 const code = (expected) => (error) => error.code === expected;
 
 async function challenge() {
@@ -111,7 +113,7 @@ test("consumption is single-use, sessions last 30 days and later sign-in preserv
   const person = await identity();
   assert.equal(person.response.account_id, person.accountID);
   assert.ok(Date.parse(person.response.expires_at) > Date.now() + 29 * 86400_000);
-  assert.deepEqual(await rpc(service, "dacha_cloud_library_get", [person.hash]), empty());
+  assert.deepEqual(await rpc(service, "dacha_cloud_library_get", [person.hash]), completeEmpty());
   const saved = await rpc(service, "dacha_cloud_library_put", [person.hash, { ...empty(), blocked_artist_ids: ["42"] }]);
   assert.equal(saved.version, 1);
   const again = await identity(person.accountID);
@@ -137,7 +139,7 @@ test("concurrent challenge redemption yields only one session", async () => {
 test("libraries stay private by token and basic invalid snapshots are rejected", async () => {
   const one = await identity(), two = await identity();
   await rpc(service, "dacha_cloud_library_put", [one.hash, { ...empty(), blocked_artist_ids: ["private-author"] }]);
-  assert.deepEqual(await rpc(service, "dacha_cloud_library_get", [two.hash]), empty());
+  assert.deepEqual(await rpc(service, "dacha_cloud_library_get", [two.hash]), completeEmpty());
   await assert.rejects(rpc(service, "dacha_cloud_library_get", [token()]), code("PT401"));
   for (const snapshot of [null, [], { ...empty(), version: -1 }, { ...empty(), version: 1.5 },
     { ...empty(), version: 2147483647 }, { ...empty(), favorites: {} }, { ...empty(), extra: true },
@@ -212,7 +214,7 @@ test("logout revokes just the current session; expiry denies an otherwise valid 
   const person = await identity(), second = await identity(person.accountID);
   assert.deepEqual(await rpc(service, "dacha_cloud_logout", [person.hash]), { ok: true });
   await assert.rejects(rpc(service, "dacha_cloud_library_get", [person.hash]), code("PT401"));
-  assert.deepEqual(await rpc(service, "dacha_cloud_library_get", [second.hash]), empty());
+  assert.deepEqual(await rpc(service, "dacha_cloud_library_get", [second.hash]), completeEmpty());
   await admin.query("update dacha_cloud.sessions set expires_at=clock_timestamp()-interval '1 second' where token_hash=$1", [second.hash]);
   await assert.rejects(rpc(service, "dacha_cloud_library_get", [second.hash]), code("PT401"));
 });
@@ -231,4 +233,61 @@ test("rate counter permits 120 calls, denies further calls and cleans expired re
   assert.equal((await admin.query("select count(*)::int as n from dacha_cloud.sessions where token_hash=$1", [person.hash])).rows[0].n, 0);
   await admin.query("update dacha_cloud.auth_rate set started_at=clock_timestamp()-interval '61 seconds'");
   assert.equal((await rpc(service, "dacha_cloud_auth_rate")).allowed, true);
+});
+
+test("hidden tracks default on legacy reads and persist through legacy writes until explicitly cleared", async () => {
+  const person = await identity();
+  const initial = await admin.query("select snapshot from dacha_cloud.libraries where account_id=$1", [person.accountID]);
+  assert.deepEqual(initial.rows[0].snapshot, completeEmpty());
+  await admin.query("update dacha_cloud.libraries set snapshot=$2 where account_id=$1", [person.accountID, empty()]);
+  assert.deepEqual(await rpc(service, "dacha_cloud_library_get", [person.hash]), completeEmpty());
+  const first = await rpc(service, "dacha_cloud_library_put", [person.hash, { ...empty(), hidden_tracks: [hiddenTrack], favorites: [hiddenTrack], playlists: [{ id: 'p', name: 'Keep me', tracks: [hiddenTrack] }] }]);
+  assert.deepEqual(first.hidden_tracks, [hiddenTrack]);
+  assert.deepEqual(first.favorites, [hiddenTrack]);
+  assert.deepEqual(first.playlists[0].tracks, [hiddenTrack]);
+  const secondSession = await identity(person.accountID);
+  assert.deepEqual((await rpc(service, "dacha_cloud_library_get", [secondSession.hash])).hidden_tracks, [hiddenTrack]);
+  const legacy = { ...first, version: 1 }; delete legacy.hidden_tracks;
+  const second = await rpc(service, "dacha_cloud_library_put", [secondSession.hash, legacy]);
+  assert.deepEqual(second.hidden_tracks, [hiddenTrack]);
+  const cleared = await rpc(service, "dacha_cloud_library_put", [person.hash, { ...second, hidden_tracks: [] }]);
+  assert.deepEqual(cleared.hidden_tracks, []);
+  assert.deepEqual(cleared.favorites, [hiddenTrack]);
+  assert.deepEqual(cleared.playlists[0].tracks, [hiddenTrack]);
+});
+
+test("hidden tracks remain private and legacy writes cannot bypass version conflicts", async () => {
+  const person = await identity(), other = await identity();
+  await rpc(service, "dacha_cloud_library_put", [person.hash, { ...empty(), hidden_tracks: [hiddenTrack] }]);
+  assert.deepEqual(await rpc(service, "dacha_cloud_library_get", [other.hash]), completeEmpty());
+  await assert.rejects(rpc(service, "dacha_cloud_library_put", [person.hash, empty()]), code("PT409"));
+  assert.deepEqual((await rpc(service, "dacha_cloud_library_get", [person.hash])).hidden_tracks, [hiddenTrack]);
+});
+
+test("hidden tracks use the locked current snapshot when a legacy write waits", async () => {
+  const person = await identity(), writer = await connect("service_role");
+  const pid = (await writer.query("select pg_backend_pid() as pid")).rows[0].pid;
+  await service.query("begin");
+  try {
+    await rpc(service, "dacha_cloud_library_put", [person.hash, { ...empty(), hidden_tracks: [hiddenTrack] }]);
+    const save = rpc(writer, "dacha_cloud_library_put", [person.hash, empty(1)]);
+    await waitUntilBlocked(pid);
+    await service.query("commit");
+    const saved = await save;
+    assert.equal(saved.version, 2);
+    assert.deepEqual(saved.hidden_tracks, [hiddenTrack]);
+  } finally { await service.query("rollback"); await writer.end(); }
+});
+
+test("hidden-track schema rejects invalid shapes and bounds the merged legacy snapshot", async () => {
+  const person = await identity();
+  for (const hidden_tracks of [null, {}, 'bad', Array(2001).fill(hiddenTrack)]) {
+    await assert.rejects(rpc(service, "dacha_cloud_library_put", [person.hash, { ...empty(), hidden_tracks }]), code("PT400"));
+    await assert.rejects(admin.query("update dacha_cloud.libraries set snapshot=$2 where account_id=$1", [person.accountID, { ...empty(), hidden_tracks }]), code("23514"));
+  }
+  const saved = await rpc(service, "dacha_cloud_library_put", [person.hash, { ...empty(), hidden_tracks: Array(2000).fill(hiddenTrack) }]);
+  assert.equal(saved.hidden_tracks.length, 2000);
+  const largeLegacy = { ...empty(1), favorites: ['x'.repeat(700000)] };
+  await assert.rejects(rpc(service, "dacha_cloud_library_put", [person.hash, largeLegacy]), code("PT400"));
+  assert.equal((await rpc(service, "dacha_cloud_library_get", [person.hash])).version, 1);
 });
