@@ -2,12 +2,102 @@ import XCTest
 
 @MainActor
 final class ListenerUITests: XCTestCase {
+    func testPaginationControlsRemainAboveMiniPlayer() throws {
+        let app = layoutApp()
+        app.launch()
+        let play = app.buttons["play-track-layout-track-01"]
+        XCTAssertTrue(play.waitForExistence(timeout: 10))
+        play.tap()
+        let mini = app.otherElements["mini-player"]
+        XCTAssertTrue(mini.waitForExistence(timeout: 5))
+        let listen = app.scrollViews["listen-scroll"]
+        let catalogMore = app.buttons["catalog-show-more"]
+        scrollToBottom(catalogMore, in: listen, above: mini)
+        assertReachable(catalogMore, scroll: listen, above: mini, name: "Listen pagination")
+        catalogMore.tap()
+        XCTAssertTrue(app.buttons["play-track-layout-track-14"].waitForExistence(timeout: 5))
+        XCTAssertFalse(catalogMore.exists)
+        for _ in 0..<6 { listen.swipeDown(velocity: .fast) }
+        let author = app.buttons["artist-demo-layout-artist"]
+        XCTAssertTrue(author.isHittable)
+        author.tap()
+        let artist = app.scrollViews["artist-scroll"]
+        let artistMore = app.buttons["artist-show-more"]
+        XCTAssertTrue(artistMore.waitForExistence(timeout: 5))
+        scrollToBottom(artistMore, in: artist, above: mini)
+        assertReachable(artistMore, scroll: artist, above: mini, name: "Artist pagination")
+        artistMore.tap()
+        XCTAssertTrue(app.buttons["play-track-layout-track-14"].waitForExistence(timeout: 5))
+        XCTAssertFalse(artistMore.exists)
+        XCTAssertTrue(app.tabBars.buttons["Library"].isHittable)
+        app.tabBars.buttons["Library"].tap()
+        XCTAssertTrue(app.scrollViews["library-scroll"].exists)
+    }
+
+    func testLibraryLastRowsRemainReachableWithMiniPlayerAtLargeTextSize() throws {
+        let app = layoutApp()
+        app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launch()
+        let play = app.buttons["play-track-layout-track-01"]
+        XCTAssertTrue(play.waitForExistence(timeout: 10))
+        play.tap()
+        let mini = app.otherElements["mini-player"]
+        XCTAssertTrue(mini.waitForExistence(timeout: 5))
+        app.tabBars.buttons["Library"].tap()
+        let library = app.scrollViews["library-scroll"]
+        let lastPlaylist = app.buttons["playlist-layout-playlist-08"]
+        scrollToBottom(lastPlaylist, in: library, above: mini)
+        assertReachable(lastPlaylist, scroll: library, above: mini, name: "Library last playlist")
+        lastPlaylist.tap()
+        let playlist = app.collectionViews["playlist-list"]
+        let lastTrack = app.buttons["play-track-layout-track-12"]
+        scrollToBottom(lastTrack, in: playlist, above: mini)
+        assertReachable(lastTrack, scroll: playlist, above: mini, name: "Playlist last track")
+        lastTrack.tap()
+        XCTAssertTrue(app.buttons["open-player"].isHittable)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        for _ in 0..<8 { library.swipeDown(velocity: .fast) }
+        app.buttons["favorites-link"].tap()
+        let favorites = app.scrollViews["favorites-scroll"]
+        scrollToBottom(lastTrack, in: favorites, above: mini)
+        assertReachable(lastTrack, scroll: favorites, above: mini, name: "Favorites last track")
+        XCTAssertTrue(app.tabBars.buttons["Settings"].isHittable)
+        app.tabBars.buttons["Settings"].tap()
+        XCTAssertTrue(app.buttons["Sign in with Meteor Wallet"].waitForExistence(timeout: 5))
+    }
+
+    private func layoutApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-test-layout", "--ui-test-store", UUID().uuidString,
+                               "-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU"]
+        return app
+    }
+
+    private func scrollToBottom(_ target: XCUIElement, in scroll: XCUIElement, above mini: XCUIElement) {
+        for _ in 0..<16 {
+            if target.exists && target.isHittable && target.frame.maxY <= mini.frame.minY { return }
+            scroll.swipeUp(velocity: .fast)
+        }
+    }
+
+    private func assertReachable(_ target: XCUIElement, scroll: XCUIElement, above mini: XCUIElement, name: String,
+                                 file: StaticString = #filePath, line: UInt = #line) {
+        let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        screenshot.name = name
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        XCTAssertTrue(target.isHittable, "\(name) must be tappable", file: file, line: line)
+        XCTAssertLessThanOrEqual(target.frame.maxY, mini.frame.minY, "\(name) must be fully above the mini player", file: file, line: line)
+        // Accessibility coordinates can differ by a floating-point rounding fraction.
+        XCTAssertLessThanOrEqual(scroll.frame.maxY, mini.frame.minY + 0.5, "\(name) scroll viewport must reserve the mini player's actual height", file: file, line: line)
+    }
+
     func testMeteorOpensLiveWallet() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-test-store", UUID().uuidString]
         app.launch()
-        app.tabBars.buttons["Настройки"].tap()
-        let meteor = app.buttons["Войти через Meteor Wallet"]
+        app.tabBars.buttons["Settings"].tap()
+        let meteor = app.buttons["Sign in with Meteor Wallet"]
         XCTAssertTrue(meteor.waitForExistence(timeout: 10))
         meteor.tap()
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
@@ -39,10 +129,10 @@ final class ListenerUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-test-store", UUID().uuidString]
         app.launch()
-        let favorite = app.buttons["Добавить в избранное"].firstMatch
+        let favorite = app.buttons["Add to favorites"].firstMatch
         XCTAssertTrue(favorite.waitForExistence(timeout: 35), "Live public catalog must load without demo mode")
         favorite.tap()
-        let play = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Слушать ")).firstMatch
+        let play = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Play ")).firstMatch
         XCTAssertTrue(play.exists)
         play.tap()
         let openPlayer = app.buttons["open-player"]
@@ -52,55 +142,55 @@ final class ListenerUITests: XCTestCase {
         XCTAssertTrue(elapsed.waitForExistence(timeout: 5))
         let progressed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label != %@", "0:00"), object: elapsed)
         XCTAssertEqual(XCTWaiter.wait(for: [progressed], timeout: 25), .completed, "Actual remote audio time must advance")
-        app.buttons["Пауза"].firstMatch.tap()
+        app.buttons["Pause"].firstMatch.tap()
         let capture = XCTAttachment(screenshot: app.screenshot())
         capture.name = "Live catalog audio playback"
         capture.lifetime = .keepAlways
         add(capture)
-        app.buttons["Свернуть плеер"].tap()
-        app.tabBars.buttons["Настройки"].tap()
-        let meteor = app.buttons["Войти через Meteor Wallet"]
+        app.buttons["Minimize player"].tap()
+        app.tabBars.buttons["Settings"].tap()
+        let meteor = app.buttons["Sign in with Meteor Wallet"]
         XCTAssertTrue(meteor.waitForExistence(timeout: 5))
         XCTAssertTrue(meteor.isEnabled, "Published wallet bridge must be configured")
-        XCTAssertFalse(app.buttons["Войти через Apple"].exists, "Unavailable login must not appear usable")
+        XCTAssertFalse(app.buttons["Sign in with Apple"].exists, "Unavailable login must not appear usable")
     }
 
     func testGuestLibraryPersistsAndAuthorPlayerOpens() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--demo", "--ui-test-store", UUID().uuidString]
         app.launch()
-        let favorite = app.buttons["Добавить в избранное"].firstMatch
+        let favorite = app.buttons["Add to favorites"].firstMatch
         XCTAssertTrue(favorite.waitForExistence(timeout: 15))
         favorite.tap()
-        XCTAssertTrue(app.buttons["Убрать из избранного"].firstMatch.exists)
+        XCTAssertTrue(app.buttons["Remove from favorites"].firstMatch.exists)
 
-        app.tabBars.buttons["Библиотека"].tap()
-        app.buttons["Создать плейлист"].tap()
+        app.tabBars.buttons["Library"].tap()
+        app.buttons["Create playlist"].tap()
         let name = app.alerts.textFields.firstMatch
         XCTAssertTrue(name.waitForExistence(timeout: 3))
         name.tap()
         name.typeText("Вечер")
-        app.alerts.buttons["Создать"].tap()
+        app.alerts.buttons["Create"].tap()
         XCTAssertTrue(app.staticTexts["Вечер"].waitForExistence(timeout: 3))
         app.terminate()
         app.launch()
-        XCTAssertTrue(app.buttons["Убрать из избранного"].firstMatch.waitForExistence(timeout: 10))
-        app.tabBars.buttons["Библиотека"].tap()
+        XCTAssertTrue(app.buttons["Remove from favorites"].firstMatch.waitForExistence(timeout: 10))
+        app.tabBars.buttons["Library"].tap()
         XCTAssertTrue(app.staticTexts["Вечер"].waitForExistence(timeout: 3))
 
-        app.tabBars.buttons["Слушать"].tap()
+        app.tabBars.buttons["Listen"].tap()
         let author = app.buttons["artist-demo-artist"]
         XCTAssertTrue(author.waitForExistence(timeout: 5))
         author.tap()
-        let authorPlay = app.buttons["Слушать только этого автора"]
+        let authorPlay = app.buttons["Play this artist only"]
         XCTAssertTrue(authorPlay.waitForExistence(timeout: 5))
         authorPlay.tap()
-        XCTAssertTrue(app.buttons["Пауза"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Pause"].firstMatch.waitForExistence(timeout: 5))
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "Artist playback"
         screenshot.lifetime = .keepAlways
         add(screenshot)
-        app.tabBars.buttons["Библиотека"].tap()
-        XCTAssertTrue(app.staticTexts["Ваша музыка"].waitForExistence(timeout: 5), "Mini player must not cover the tab bar")
+        app.tabBars.buttons["Library"].tap()
+        XCTAssertTrue(app.staticTexts["Your music"].waitForExistence(timeout: 5), "Mini player must not cover the tab bar")
     }
 }
