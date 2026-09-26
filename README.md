@@ -1,3 +1,5 @@
+> **iPhone listener fork:** the native app is in [`ios/`](ios/README.md), with [release status and verification](docs/release/status.md). This development fork is not an approved App Store release. Upstream documentation follows.
+
 # near.fm
 
 Decentralized platform for AI-generated music, powered by NEAR Protocol.
