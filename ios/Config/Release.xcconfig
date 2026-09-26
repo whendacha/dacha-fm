@@ -1,5 +1,6 @@
 // Public streaming catalog; local wallet identity through the published HTTPS bridge.
 MOBILE_API_BASE_URL =
+CLOUD_API_BASE_URL = https:/$()/clxaqzlecqiypyiwgkxd.supabase.co/functions/v1/dacha-cloud
 METEOR_BRIDGE_URL = https:/$()/whendacha.github.io/dacha-fm
 PRIVACY_POLICY_URL = https:/$()/whendacha.github.io/dacha-fm/privacy.html
 SUPPORT_URL = https:/$()/whendacha.github.io/dacha-fm/support.html
