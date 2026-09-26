@@ -52,6 +52,21 @@ final class AppModel {
     let isDemo: Bool
 
     var library: LibrarySnapshot? { _ = libraryRevision; return libraryStore?.snapshot }
+    var hiddenTrackIDs: Set<String> { Set(library?.hiddenTracks.map(\.id) ?? []) }
+    var visibleTracks: [Track] { visibleTracks(in: tracks) }
+    var visibleArtistTracks: [Track] { visibleTracks(in: selectedArtistTracks) }
+    var visibleFavorites: [Track] { visibleTracks(in: library?.favorites ?? []) }
+
+    func visibleTracks(in songs: [Track]) -> [Track] {
+        let artists = blockedIDs
+        let hidden = hiddenTrackIDs
+        return songs.filter { !artists.contains($0.artistID) && !hidden.contains($0.id) }
+    }
+
+    private var guestHasContent: Bool {
+        guard let snapshot = guestStore?.snapshot else { return false }
+        return !snapshot.favorites.isEmpty || !snapshot.playlists.isEmpty || !snapshot.hiddenTracks.isEmpty
+    }
     var isSignedIn: Bool { account != nil }
     var usesPublicCatalog: Bool { baseURL == nil }
     var apiConfigured: Bool { true }
@@ -87,7 +102,7 @@ final class AppModel {
                     try libraryStore?.enableCloudSync(legacyPending: UserDefaults.standard.bool(forKey: "library-pending-\(userID)"))
                     UserDefaults.standard.removeObject(forKey: "library-pending-\(userID)")
                 }
-                guestMergeAvailable = !(guestStore?.snapshot.favorites.isEmpty ?? true) || !(guestStore?.snapshot.playlists.isEmpty ?? true)
+                guestMergeAvailable = guestHasContent
             } else {
                 libraryStore = guestStore
             }
@@ -99,6 +114,7 @@ final class AppModel {
             Task { @MainActor [weak self] in await self?.loadMorePlaybackArtist(artistID, intentID: intentID) }
         }
         configureSynchronizer()
+        applyLibraryBlocks()
         Task { await bootstrap() }
     }
 
@@ -185,8 +201,10 @@ final class AppModel {
                     return Playlist(id: "layout-playlist-\(suffix)", name: "Layout playlist \(suffix)", tracks: songs)
                 }
                 do {
-                    try libraryStore?.replace(LibrarySnapshot(version: 0, favorites: songs, playlists: playlists, blockedArtistIDs: []))
-                    libraryRevision += 1
+                    if let snapshot = library, snapshot.favorites.isEmpty && snapshot.playlists.isEmpty && snapshot.hiddenTracks.isEmpty {
+                        try libraryStore?.replace(LibrarySnapshot(version: 0, favorites: songs, playlists: playlists, blockedArtistIDs: []))
+                        libraryRevision += 1
+                    }
                 } catch { errorText = error.localizedDescription }
                 return
             }
@@ -339,7 +357,7 @@ final class AppModel {
         #if DEBUG
         if Self.isLayoutUITest {
             let existing = Set(player.tracks.map(\.id))
-            player.append(layoutTestTracks().filter { $0.artistID == artistID && !existing.contains($0.id) })
+            player.append(visibleTracks(in: layoutTestTracks()).filter { $0.artistID == artistID && !existing.contains($0.id) })
             playbackArtistExhausted.insert(artistID)
             let activeIntent = playbackArtistIntent.removeValue(forKey: artistID) ?? intentID
             player.resumeAfterAuthorPage(hasMore: false, intentID: activeIntent)
@@ -360,7 +378,7 @@ final class AppModel {
                       !blockedIDs.contains(artistID) else { return }
                 playbackArtistPages[artistID] = page.page
                 let existing = Set(player.tracks.map(\.id))
-                let additions = page.tracks.filter { $0.artistID == artistID && !existing.contains($0.id) }
+                let additions = visibleTracks(in: page.tracks).filter { $0.artistID == artistID && !existing.contains($0.id) }
                 player.append(additions)
                 if !page.hasMore { playbackArtistExhausted.insert(artistID) }
                 if !additions.isEmpty || !page.hasMore {
@@ -378,7 +396,7 @@ final class AppModel {
     }
 
     func playArtist(_ artist: Artist, starting track: Track? = nil) {
-        let songs = selectedArtistTracks.filter { $0.artistID == artist.id && !blockedIDs.contains($0.artistID) }
+        let songs = visibleArtistTracks.filter { $0.artistID == artist.id }
         guard !songs.isEmpty else { return }
         playbackGeneration = UUID()
         playbackArtistLoading[artist.id] = nil
@@ -390,7 +408,7 @@ final class AppModel {
     }
 
     func playTrack(_ track: Track) {
-        guard !blockedIDs.contains(track.artistID) else { return }
+        guard !blockedIDs.contains(track.artistID), !hiddenTrackIDs.contains(track.id) else { return }
         playbackGeneration = UUID()
         player.play([track], artistID: track.artistID, startID: track.id)
     }
@@ -400,7 +418,7 @@ final class AppModel {
     }
 
     func playTracks(_ tracks: [Track], startID: String?) {
-        let songs = tracks.filter { !blockedIDs.contains($0.artistID) }
+        let songs = visibleTracks(in: tracks)
         playbackGeneration = UUID()
         player.play(songs, startID: startID)
     }
@@ -424,7 +442,12 @@ final class AppModel {
     func deletePlaylist(_ id: String) { editLibrary { try $0.deletePlaylist(id: id) } }
     func add(_ track: Track, to playlistID: String) { editLibrary { try $0.add(track, to: playlistID) } }
     func remove(_ trackID: String, from playlistID: String) { editLibrary { try $0.remove(trackID: trackID, from: playlistID) } }
-    func move(in playlistID: String, from: Int, to: Int) { editLibrary { try $0.moveTrack(in: playlistID, from: from, to: to) } }
+    func move(in playlistID: String, from: Int, to: Int) { editLibrary { try $0.moveVisibleTrack(in: playlistID, from: from, to: to) } }
+    func hideTrack(_ track: Track) {
+        editLibrary { try $0.hideTrack(track) }
+        applyLibraryBlocks()
+    }
+    func unhideTrack(_ trackID: String) { editLibrary { try $0.unhideTrack(trackID) } }
     func blockArtist(_ artistID: String) {
         guard !accountActionInProgress else { return }
         editLibrary { try $0.blockArtist(artistID) }
@@ -485,7 +508,7 @@ final class AppModel {
         player.switchOwner(incoming.userID)
         appliedBlockedIDs = []
         playbackGeneration = UUID()
-        guestMergeAvailable = !(guestStore?.snapshot.favorites.isEmpty ?? true) || !(guestStore?.snapshot.playlists.isEmpty ?? true)
+        guestMergeAvailable = guestHasContent
         syncState = incoming.isLocalWallet ? .local : .offline
         UserDefaults.standard.removeObject(forKey: "library-pending-\(incoming.userID)")
         configureSynchronizer()
@@ -532,6 +555,7 @@ final class AppModel {
         let blocked = blockedIDs
         for id in blocked.subtracting(appliedBlockedIDs) { player.blockArtist(id) }
         appliedBlockedIDs = blocked
+        player.hideTracks(hiddenTrackIDs)
         artists.removeAll { blockedIDs.contains($0.id) }
         tracks.removeAll { blockedIDs.contains($0.artistID) }
         selectedArtistTracks.removeAll { blockedIDs.contains($0.artistID) }
@@ -569,6 +593,7 @@ final class AppModel {
             try libraryStore?.mergeGuest(guest)
             libraryRevision += 1
             guestMergeAvailable = false
+            applyLibraryBlocks()
             if cloudSyncEnabled { requestSync() }
         } catch { errorText = error.localizedDescription }
     }
