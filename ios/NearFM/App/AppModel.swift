@@ -69,7 +69,7 @@ final class AppModel {
 
     init() {
         #if DEBUG
-        isDemo = ProcessInfo.processInfo.arguments.contains("--demo")
+        isDemo = ProcessInfo.processInfo.arguments.contains("--demo") || Self.isLayoutUITest
         #else
         isDemo = false
         #endif
@@ -93,7 +93,7 @@ final class AppModel {
             }
             syncState = account == nil || account?.isLocalWallet == true ? .local : (needsCloudReauthentication ? .reauthenticationRequired : .offline)
         } catch {
-            errorText = "Библиотеку не удалось открыть: \(error.localizedDescription). Данные на диске сохранены."
+            errorText = "Could not open your library: \(error.localizedDescription). Your saved data is still on this device."
         }
         player.onNeedMoreArtistTracks = { [weak self] artistID, intentID in
             Task { @MainActor [weak self] in await self?.loadMorePlaybackArtist(artistID, intentID: intentID) }
@@ -125,6 +125,23 @@ final class AppModel {
         #endif
     }
 
+    #if DEBUG
+    // Layout tests use an isolated guest store and bundled audio only.
+    private static var isLayoutUITest: Bool {
+        testStoreID != nil && ProcessInfo.processInfo.arguments.contains("--ui-test-layout")
+    }
+
+    private func layoutTestTracks() -> [Track] {
+        guard let audio = Bundle.main.url(forResource: "demo", withExtension: "wav") else { return [] }
+        return (1...14).map { index in
+            let suffix = String(format: "%02d", index)
+            return Track(id: "layout-track-\(suffix)", title: "Layout track \(suffix)",
+                         artistID: "demo-layout-artist", artistName: "Layout artist", audioURL: audio,
+                         artworkURL: nil, duration: nil)
+        }
+    }
+    #endif
+
     private static func libraryURL(for userID: String?) -> URL {
         let name: String
         if let userID {
@@ -154,11 +171,27 @@ final class AppModel {
         if isDemo {
             #if DEBUG
             guard let fixture = Bundle.main.url(forResource: "demo", withExtension: "wav") else {
-                errorText = "Демо-аудио отсутствует в сборке."
+                errorText = "Demo audio is missing from this build."
                 return
             }
-            let demo = Track(id: "demo-track", title: "Демо-запись", artistID: "demo-artist", artistName: "Демо-автор", audioURL: fixture, artworkURL: nil, duration: nil)
-            artists = [Artist(id: "demo-artist", name: "Демо-автор", artworkURL: nil, trackCount: 1)]
+            if Self.isLayoutUITest {
+                let songs = Array(layoutTestTracks().prefix(12))
+                artists = [Artist(id: "demo-layout-artist", name: "Layout artist", artworkURL: nil, trackCount: 14)]
+                tracks = songs
+                catalogHasMore = true
+                artistHasMore = true
+                let playlists = (1...8).map { index in
+                    let suffix = String(format: "%02d", index)
+                    return Playlist(id: "layout-playlist-\(suffix)", name: "Layout playlist \(suffix)", tracks: songs)
+                }
+                do {
+                    try libraryStore?.replace(LibrarySnapshot(version: 0, favorites: songs, playlists: playlists, blockedArtistIDs: []))
+                    libraryRevision += 1
+                } catch { errorText = error.localizedDescription }
+                return
+            }
+            let demo = Track(id: "demo-track", title: "Demo track", artistID: "demo-artist", artistName: "Demo artist", audioURL: fixture, artworkURL: nil, duration: nil)
+            artists = [Artist(id: "demo-artist", name: "Demo artist", artworkURL: nil, trackCount: 1)]
             tracks = [demo]
             catalogHasMore = false
             #endif
@@ -202,6 +235,15 @@ final class AppModel {
     }
 
     func loadMoreCatalog() async {
+        #if DEBUG
+        if Self.isLayoutUITest {
+            guard catalogHasMore else { return }
+            tracks.append(contentsOf: layoutTestTracks().suffix(2))
+            trackPage = 2
+            catalogHasMore = false
+            return
+        }
+        #endif
         guard catalogHasMore, !catalogLoading, !isDemo else { return }
         let generation = catalogGeneration
         let query = searchText
@@ -217,6 +259,15 @@ final class AppModel {
     }
 
     func loadMoreArtists() async {
+        #if DEBUG
+        if Self.isLayoutUITest {
+            guard artistHasMore else { return }
+            artists.append(Artist(id: "demo-layout-artist-02", name: "Layout artist 02", artworkURL: nil, trackCount: 0))
+            artistPage = 2
+            artistHasMore = false
+            return
+        }
+        #endif
         guard artistHasMore, !catalogLoading, !isDemo else { return }
         let generation = catalogGeneration
         let query = searchText
@@ -244,6 +295,15 @@ final class AppModel {
     func loadMoreArtistTracks(artistID: String) async {
         guard !blockedIDs.contains(artistID), selectedArtist?.id == artistID,
               selectedArtistHasMore, browseArtistLoadingID != artistID else { return }
+        #if DEBUG
+        if Self.isLayoutUITest {
+            let songs = layoutTestTracks().filter { $0.artistID == artistID }
+            selectedArtistTracks.append(contentsOf: browseArtistPage == 0 ? Array(songs.prefix(12)) : Array(songs.suffix(2)))
+            browseArtistPage += 1
+            selectedArtistHasMore = browseArtistPage == 1 && songs.count > 12
+            return
+        }
+        #endif
         if isDemo {
             selectedArtistTracks = tracks.filter { $0.artistID == artistID }
             selectedArtistHasMore = false
@@ -276,6 +336,16 @@ final class AppModel {
         let generation = playbackGeneration
         playbackArtistLoading[artistID] = requestID
         defer { if playbackArtistLoading[artistID] == requestID { playbackArtistLoading[artistID] = nil } }
+        #if DEBUG
+        if Self.isLayoutUITest {
+            let existing = Set(player.tracks.map(\.id))
+            player.append(layoutTestTracks().filter { $0.artistID == artistID && !existing.contains($0.id) })
+            playbackArtistExhausted.insert(artistID)
+            let activeIntent = playbackArtistIntent.removeValue(forKey: artistID) ?? intentID
+            player.resumeAfterAuthorPage(hasMore: false, intentID: activeIntent)
+            return
+        }
+        #endif
         guard !isDemo else {
             playbackArtistExhausted.insert(artistID)
             let activeIntent = playbackArtistIntent.removeValue(forKey: artistID) ?? intentID
@@ -340,7 +410,7 @@ final class AppModel {
 
     private func editLibrary(_ body: (LibraryStore) throws -> Void) {
         guard !accountActionInProgress else { return }
-        guard let libraryStore else { errorText = "Библиотека недоступна."; return }
+        guard let libraryStore else { errorText = "Your library is unavailable."; return }
         do {
             try body(libraryStore)
             libraryRevision += 1
@@ -368,16 +438,16 @@ final class AppModel {
     func unblockArtist(_ artistID: String) { editLibrary { try $0.unblockArtist(artistID) }; Task { await search(searchText) } }
 
     func report(track: Track?, artistID: String?, reason: String) async {
-        guard !isDemo else { errorText = "В демо-режиме жалобы не отправляются."; return }
+        guard !isDemo else { errorText = "Reports cannot be submitted in demo mode."; return }
         do {
             try await api().report(trackID: track?.id, artistID: artistID, reason: reason)
-            noticeText = "Жалоба отправлена на рассмотрение."
+            noticeText = "Your report was submitted for review."
         } catch { errorText = error.localizedDescription }
     }
 
     func loginWithApple() async {
         guard !isAuthenticating, !accountActionInProgress else { return }
-        guard canAppleLogin else { errorText = "Вход через Apple временно недоступен."; return }
+        guard canAppleLogin else { errorText = "Apple sign-in is temporarily unavailable."; return }
         isAuthenticating = true
         defer { isAuthenticating = false }
         do { try await acceptSession(authentication.signInWithApple(api: api())) }
@@ -515,7 +585,7 @@ final class AppModel {
         } catch {
             guard accountGeneration == generation else { return }
             configureSynchronizer()
-            errorText = "Выход на сервере не подтверждён: \(error.localizedDescription)"
+            errorText = "The server could not confirm sign-out: \(error.localizedDescription)"
             return
         }
         if accountGeneration == generation { expireSession(showExpired: false) }
@@ -524,7 +594,7 @@ final class AppModel {
     func deleteAccount() async {
         guard let deletingAccount = account, !accountActionInProgress else { return }
         if deletingAccount.isCloudWallet && !cloudSyncEnabled {
-            errorText = "Войдите через Meteor ещё раз, чтобы удалить облачный профиль и его данные."
+            errorText = "Sign in through Meteor again to delete your cloud profile and its data."
             return
         }
         accountActionInProgress = true
@@ -539,11 +609,11 @@ final class AppModel {
             if FileManager.default.fileExists(atPath: oldURL.path) { try FileManager.default.removeItem(at: oldURL) }
             UserDefaults.standard.removeObject(forKey: "library-pending-\(deletingAccount.userID)")
             expireSession(showExpired: false)
-            noticeText = "Аккаунт и его библиотека удалены."
+            noticeText = "Your account and library have been deleted."
         } catch MobileAPIError.unauthorized {
             guard accountGeneration == generation else { return }
             requireReauthentication()
-            errorText = "Срок действия входа истёк. Подтвердите кошелёк через Meteor ещё раз, чтобы удалить облачный профиль. Локальная библиотека сохранена."
+            errorText = "Your session has expired. Verify your wallet through Meteor again to delete your cloud profile. Your local library is still saved."
         } catch {
             guard accountGeneration == generation else { return }
             if cloudDeleted {
@@ -555,7 +625,7 @@ final class AppModel {
             } else {
                 configureSynchronizer()
             }
-            errorText = "Удалить профиль не удалось: \(error.localizedDescription)"
+            errorText = "Could not delete your profile: \(error.localizedDescription)"
         }
     }
 
@@ -573,6 +643,6 @@ final class AppModel {
         guestMergeAvailable = false
         syncState = .local
         applyLibraryBlocks()
-        if showExpired { errorText = "Сессия завершилась. Войдите снова." }
+        if showExpired { errorText = "Your session has ended. Please sign in again." }
     }
 }
