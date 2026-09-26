@@ -16,23 +16,30 @@ struct ContentView: View {
     @State private var selectedTab = 0
     var body: some View {
         TabView(selection: $selectedTab) {
-            NavigationStack { ListenView(model: model) }
-                .safeAreaInset(edge: .bottom, spacing: 0) { miniPlayer }
-                .tabItem { Label("Слушать", systemImage: "waveform") }.tag(0)
-            NavigationStack { LibraryView(model: model) }
-                .safeAreaInset(edge: .bottom, spacing: 0) { miniPlayer }
-                .tabItem { Label("Библиотека", systemImage: "square.stack") }.tag(1)
-            NavigationStack { SettingsView(model: model) }
-                .safeAreaInset(edge: .bottom, spacing: 0) { miniPlayer }
-                .tabItem { Label("Настройки", systemImage: "slider.horizontal.3") }.tag(2)
+            tabRoot { ListenView(model: model) }
+                .tabItem { Label("Listen", systemImage: "waveform") }.tag(0)
+            tabRoot { LibraryView(model: model) }
+                .tabItem { Label("Library", systemImage: "square.stack") }.tag(1)
+            tabRoot { SettingsView(model: model) }
+                .tabItem { Label("Settings", systemImage: "slider.horizontal.3") }.tag(2)
         }
         .sheet(isPresented: $model.playerPresented) { PlayerView(model: model) }
         .alert("Dacha FM", isPresented: Binding(get: { model.errorText != nil }, set: { if !$0 { model.errorText = nil } })) {
-            Button("Понятно", role: .cancel) { model.errorText = nil }
+            Button("OK", role: .cancel) { model.errorText = nil }
         } message: { Text(model.errorText ?? "") }
-        .alert("Готово", isPresented: Binding(get: { model.noticeText != nil }, set: { if !$0 { model.noticeText = nil } })) {
-            Button("Хорошо", role: .cancel) { model.noticeText = nil }
+        .alert("Done", isPresented: Binding(get: { model.noticeText != nil }, set: { if !$0 { model.noticeText = nil } })) {
+            Button("OK", role: .cancel) { model.noticeText = nil }
         } message: { Text(model.noticeText ?? "") }
+    }
+
+    private func tabRoot<Root: View>(@ViewBuilder _ content: () -> Root) -> some View {
+        VStack(spacing: 0) {
+            NavigationStack { content() }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Reserve real space for every pushed destination, including at larger text sizes.
+            miniPlayer.fixedSize(horizontal: false, vertical: true)
+        }
+        .background(Theme.background)
     }
 
     @ViewBuilder private var miniPlayer: some View {
@@ -52,12 +59,12 @@ struct ListenView: View {
                             .font(.title2.weight(.bold)).foregroundStyle(Theme.accent)
                         Text("DACHA FM").font(.caption.weight(.black)).tracking(3).foregroundStyle(Theme.cream)
                         Spacer()
-                        if model.isDemo { Text("ДЕМО").font(.caption2.weight(.bold)).padding(.horizontal, 10).padding(.vertical, 5).background(Theme.accent, in: Capsule()).foregroundStyle(.black) }
+                        if model.isDemo { Text("DEMO").font(.caption2.weight(.bold)).padding(.horizontal, 10).padding(.vertical, 5).background(Theme.accent, in: Capsule()).foregroundStyle(.black) }
                     }
-                    Text("Музыка рядом.")
+                    Text("Music feels close.")
                         .font(.system(size: 40, weight: .bold, design: .rounded)).tracking(-1.7)
                         .foregroundStyle(Theme.cream)
-                    Text("Выберите автора и оставайтесь в его звучании.")
+                    Text("Find an artist. Stay with their sound.")
                         .font(.subheadline).foregroundStyle(Theme.muted)
                 }
                 .padding(24)
@@ -69,24 +76,24 @@ struct ListenView: View {
 
                 HStack(spacing: 12) {
                     Image(systemName: "magnifyingglass").foregroundStyle(Theme.muted)
-                    TextField("Песня или автор", text: $query)
+                    TextField("Song or artist", text: $query)
                         .autocorrectionDisabled()
                         .submitLabel(.search)
                         .onSubmit { Task { await model.search(query.trimmingCharacters(in: .whitespacesAndNewlines)) } }
                     if !query.isEmpty {
                         Button { query = ""; Task { await model.search("") } } label: { Image(systemName: "xmark.circle.fill") }
-                            .accessibilityLabel("Очистить поиск")
+                            .accessibilityLabel("Clear search")
                     }
                 }
                 .padding(15).background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
 
                 if !model.apiConfigured && !model.isDemo {
-                    EmptyCard(icon: "wifi.slash", title: "Каталог недоступен", detail: "Сервис временно недоступен. Попробуйте позже.")
+                    EmptyCard(icon: "wifi.slash", title: "Catalog unavailable", detail: "The service is temporarily unavailable. Please try again later.")
                 }
 
                 if !model.artists.isEmpty || model.artistHasMore {
                     VStack(alignment: .leading, spacing: 16) {
-                        SectionTitle(title: "Авторы", subtitle: "Один автор — одна очередь")
+                        SectionTitle(title: "Artists", subtitle: "One artist. One queue.")
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
                                 ForEach(model.artists) { artist in
@@ -95,7 +102,7 @@ struct ListenView: View {
                                         .accessibilityIdentifier("artist-\(artist.id)")
                                 }
                                 if model.artistHasMore {
-                                    Button("Ещё авторы") { Task { await model.loadMoreArtists() } }
+                                    Button("More artists") { Task { await model.loadMoreArtists() } }
                                         .frame(width: 130, height: 170).background(Theme.surface, in: RoundedRectangle(cornerRadius: 20))
                                 }
                             }
@@ -104,22 +111,24 @@ struct ListenView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 16) {
-                    SectionTitle(title: query.isEmpty ? "Песни" : "Найденные песни", subtitle: "Слушайте и сохраняйте")
+                    SectionTitle(title: query.isEmpty ? "Songs" : "Search results", subtitle: "Listen and save")
                     if model.tracks.isEmpty && !model.catalogLoading {
-                        EmptyCard(icon: "music.note", title: "Песен пока нет", detail: model.isDemo ? "Демо-запись недоступна." : "Попробуйте другой запрос или загляните позже.")
+                        EmptyCard(icon: "music.note", title: "No songs yet", detail: model.isDemo ? "Demo audio is unavailable." : "Try another search or check back later.")
                     }
                     ForEach(model.tracks) { track in TrackRow(model: model, track: track) { model.playTrack(track) } }
                     if model.catalogHasMore {
                         Button { Task { await model.loadMoreCatalog() } } label: {
-                            Label("Показать ещё", systemImage: "arrow.down")
+                            Label("Show more", systemImage: "arrow.down")
                                 .frame(maxWidth: .infinity).padding(14).background(Theme.surface, in: RoundedRectangle(cornerRadius: 14))
                         }
+                        .accessibilityIdentifier("catalog-show-more")
                     }
                     if model.catalogLoading { ProgressView().frame(maxWidth: .infinity) }
                 }
             }
             .padding(.horizontal, 20).padding(.top, 14).padding(.bottom, 28)
         }
+        .accessibilityIdentifier("listen-scroll")
         .background(Theme.background)
         .navigationBarHidden(true)
     }
@@ -135,35 +144,37 @@ struct ArtistDetailView: View {
                 Artwork(url: artist.artworkURL, symbol: "person.crop.circle.fill", size: 170)
                     .frame(maxWidth: .infinity).padding(.top, 10)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("АВТОР").font(.caption.weight(.bold)).tracking(2).foregroundStyle(Theme.accent)
+                    Text("ARTIST").font(.caption.weight(.bold)).tracking(2).foregroundStyle(Theme.accent)
                     Text(artist.name).font(.largeTitle.bold()).foregroundStyle(Theme.cream)
-                    Text(artist.trackCount >= 0 ? "\(artist.trackCount) песен" : "Слушать автора").foregroundStyle(Theme.muted)
+                    Text(artist.trackCount >= 0 ? "\(artist.trackCount) songs" : "Play artist").foregroundStyle(Theme.muted)
                 }
                 Button { model.playArtist(artist) } label: {
-                    Label("Слушать только этого автора", systemImage: "play.fill")
+                    Label("Play this artist only", systemImage: "play.fill")
                         .font(.headline).frame(maxWidth: .infinity).padding(17)
                         .background(Theme.accent, in: RoundedRectangle(cornerRadius: 16)).foregroundStyle(.black)
                 }
                 .disabled(model.selectedArtistTracks.isEmpty)
                 HStack {
-                    Text("Песни").font(.title2.bold())
+                    Text("Songs").font(.title2.bold())
                     Spacer()
                     Menu {
-                        Button("Пожаловаться", systemImage: "flag") { reportPresented = true }
-                        Button("Скрыть автора", systemImage: "hand.raised", role: .destructive) { model.blockArtist(artist.id) }
+                        Button("Report", systemImage: "flag") { reportPresented = true }
+                        Button("Hide artist", systemImage: "hand.raised", role: .destructive) { model.blockArtist(artist.id) }
                     } label: { Image(systemName: "ellipsis.circle").font(.title3) }
-                        .accessibilityLabel("Действия с автором")
+                        .accessibilityLabel("Artist options")
                 }
                 ForEach(model.selectedArtistTracks) { track in
                     TrackRow(model: model, track: track) { model.playArtist(artist, starting: track) }
                 }
-                if model.selectedArtistTracks.isEmpty { EmptyCard(icon: "music.note", title: model.selectedArtistHasMore ? "Ищем песни автора" : "Песен нет", detail: model.selectedArtistHasMore ? "Можно загрузить следующую страницу каталога." : "У этого автора пока нет доступных записей.") }
-                if model.selectedArtistHasMore && !model.isDemo {
-                    Button("Показать ещё") { Task { await model.loadMoreArtistTracks(artistID: artist.id) } }
+                if model.selectedArtistTracks.isEmpty { EmptyCard(icon: "music.note", title: model.selectedArtistHasMore ? "Finding songs" : "No songs", detail: model.selectedArtistHasMore ? "Load the next catalog page to keep looking." : "This artist has no available recordings yet.") }
+                if model.selectedArtistHasMore {
+                    Button("Show more") { Task { await model.loadMoreArtistTracks(artistID: artist.id) } }
                         .frame(maxWidth: .infinity).padding(14).background(Theme.surface, in: RoundedRectangle(cornerRadius: 14))
+                        .accessibilityIdentifier("artist-show-more")
                 }
             }.padding(20)
         }
+        .accessibilityIdentifier("artist-scroll")
         .background(Theme.background)
         .navigationTitle(artist.name)
         .navigationBarTitleDisplayMode(.inline)
@@ -180,8 +191,8 @@ struct LibraryView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Ваша музыка").font(.system(size: 34, weight: .bold, design: .rounded))
-                    Text(model.cloudSyncEnabled && model.isSignedIn ? "Личная библиотека аккаунта" : "Сохранено на этом iPhone")
+                    Text("Your music").font(.system(size: 34, weight: .bold, design: .rounded))
+                    Text(model.cloudSyncEnabled && model.isSignedIn ? "Your account library" : "Saved on this iPhone")
                         .font(.subheadline).foregroundStyle(Theme.muted)
                 }
                 if let library = model.library {
@@ -190,20 +201,20 @@ struct LibraryView: View {
                             Image(systemName: "heart.fill").font(.title2).foregroundStyle(Theme.accent)
                                 .frame(width: 50, height: 50).background(Theme.elevated, in: RoundedRectangle(cornerRadius: 12))
                             VStack(alignment: .leading, spacing: 3) {
-                                Text("Избранное").font(.headline)
-                                Text("\(library.favorites.count) песен").font(.caption).foregroundStyle(Theme.muted)
+                                Text("Favorites").font(.headline)
+                                Text("\(library.favorites.count) songs").font(.caption).foregroundStyle(Theme.muted)
                             }
                             Spacer()
                             Image(systemName: "chevron.right").foregroundStyle(Theme.muted)
                         }.padding(14).background(Theme.surface, in: RoundedRectangle(cornerRadius: 18))
-                    }.buttonStyle(.plain)
+                    }.buttonStyle(.plain).accessibilityIdentifier("favorites-link")
                     HStack {
-                        Text("Плейлисты").font(.title2.bold())
+                        Text("Playlists").font(.title2.bold())
                         Spacer()
                         Button { creating = true } label: { Image(systemName: "plus.circle.fill").font(.title2) }
-                            .accessibilityLabel("Создать плейлист")
+                            .accessibilityLabel("Create playlist")
                     }
-                    if library.playlists.isEmpty { EmptyCard(icon: "square.stack", title: "Пока нет плейлистов", detail: "Соберите музыку, к которой хочется вернуться.") }
+                    if library.playlists.isEmpty { EmptyCard(icon: "square.stack", title: "No playlists yet", detail: "Collect the music you want to return to.") }
                     ForEach(library.playlists) { playlist in
                         NavigationLink { PlaylistView(model: model, playlistID: playlist.id) } label: {
                             HStack(spacing: 14) {
@@ -211,22 +222,23 @@ struct LibraryView: View {
                                     .frame(width: 54, height: 54).background(Theme.elevated, in: RoundedRectangle(cornerRadius: 12))
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(playlist.name).font(.headline)
-                                    Text("\(playlist.tracks.count) песен").font(.caption).foregroundStyle(Theme.muted)
+                                    Text("\(playlist.tracks.count) songs").font(.caption).foregroundStyle(Theme.muted)
                                 }
                                 Spacer()
                                 Image(systemName: "chevron.right").foregroundStyle(Theme.muted)
                             }.padding(12).background(Theme.surface, in: RoundedRectangle(cornerRadius: 18))
-                        }.buttonStyle(.plain)
+                        }.buttonStyle(.plain).accessibilityIdentifier("playlist-\(playlist.id)")
                     }
-                } else { EmptyCard(icon: "externaldrive.badge.exclamationmark", title: "Библиотека недоступна", detail: "Проверьте ошибку при запуске приложения.") }
+                } else { EmptyCard(icon: "externaldrive.badge.exclamationmark", title: "Library unavailable", detail: "The library could not be opened. Check the startup message.") }
             }.padding(20)
         }
+        .accessibilityIdentifier("library-scroll")
         .background(Theme.background)
-        .navigationTitle("Библиотека")
-        .alert("Новый плейлист", isPresented: $creating) {
-            TextField("Название", text: $newPlaylist)
-            Button("Создать") { model.createPlaylist(name: newPlaylist); newPlaylist = "" }
-            Button("Отмена", role: .cancel) { newPlaylist = "" }
+        .navigationTitle("Library")
+        .alert("New playlist", isPresented: $creating) {
+            TextField("Name", text: $newPlaylist)
+            Button("Create") { model.createPlaylist(name: newPlaylist); newPlaylist = "" }
+            Button("Cancel", role: .cancel) { newPlaylist = "" }
         }
     }
 }
@@ -236,12 +248,12 @@ struct FavoritesView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 10) {
-                if model.library?.favorites.isEmpty != false { EmptyCard(icon: "heart", title: "Пока пусто", detail: "Нажмите на сердце рядом с песней, чтобы сохранить её.") }
+                if model.library?.favorites.isEmpty != false { EmptyCard(icon: "heart", title: "No favorites yet", detail: "Tap the heart beside a song to save it.") }
                 ForEach(model.library?.favorites ?? []) { track in
                     TrackRow(model: model, track: track) { model.playTracks(model.library?.favorites ?? [], startID: track.id) }
                 }
             }.padding(20)
-        }.background(Theme.background).navigationTitle("Избранное")
+        }.accessibilityIdentifier("favorites-scroll").background(Theme.background).navigationTitle("Favorites")
     }
 }
 
@@ -259,25 +271,25 @@ struct PlaylistView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 5) {
                         Text(playlist.name).font(.largeTitle.bold())
-                        Text("\(playlist.tracks.count) песен · перетащите, чтобы изменить порядок")
+                        Text("\(playlist.tracks.count) songs · drag to reorder")
                             .font(.caption).foregroundStyle(Theme.muted)
                     }
                     Spacer()
                     Menu {
-                        Button("Переименовать", systemImage: "pencil") { name = playlist.name; editingName = true }
-                        Button("Удалить плейлист", systemImage: "trash", role: .destructive) { confirmingDelete = true }
+                        Button("Rename", systemImage: "pencil") { name = playlist.name; editingName = true }
+                        Button("Delete playlist", systemImage: "trash", role: .destructive) { confirmingDelete = true }
                     } label: { Image(systemName: "ellipsis.circle").font(.title2) }
-                        .accessibilityLabel("Действия с плейлистом")
+                        .accessibilityLabel("Playlist options")
                 }.padding(20)
                 Button { model.playPlaylist(playlist) } label: {
-                    Label("Слушать плейлист", systemImage: "play.fill").frame(maxWidth: .infinity).padding(14)
+                    Label("Play playlist", systemImage: "play.fill").frame(maxWidth: .infinity).padding(14)
                         .background(Theme.accent, in: RoundedRectangle(cornerRadius: 14)).foregroundStyle(.black)
                 }.disabled(playlist.tracks.isEmpty).padding(.horizontal, 20)
                 List {
                     ForEach(playlist.tracks) { track in
                         TrackRow(model: model, track: track) { model.playPlaylist(playlist, startID: track.id) }
                             .listRowBackground(Theme.background)
-                            .swipeActions { Button("Убрать", role: .destructive) { model.remove(track.id, from: playlistID) } }
+                            .swipeActions { Button("Remove", role: .destructive) { model.remove(track.id, from: playlistID) } }
                     }
                     .onMove { source, destination in
                         guard let from = source.first else { return }
@@ -286,18 +298,19 @@ struct PlaylistView: View {
                     }
                 }
                 .listStyle(.plain).scrollContentBackground(.hidden)
+                .accessibilityIdentifier("playlist-list")
                 .environment(\.editMode, .constant(.active))
             }
         }
-        .background(Theme.background).navigationTitle("Плейлист").navigationBarTitleDisplayMode(.inline)
-        .alert("Переименовать", isPresented: $editingName) {
-            TextField("Название", text: $name)
-            Button("Сохранить") { model.renamePlaylist(playlistID, name: name) }
-            Button("Отмена", role: .cancel) {}
+        .background(Theme.background).navigationTitle("Playlist").navigationBarTitleDisplayMode(.inline)
+        .alert("Rename", isPresented: $editingName) {
+            TextField("Name", text: $name)
+            Button("Save") { model.renamePlaylist(playlistID, name: name) }
+            Button("Cancel", role: .cancel) {}
         }
-        .confirmationDialog("Удалить плейлист?", isPresented: $confirmingDelete) {
-            Button("Удалить", role: .destructive) { model.deletePlaylist(playlistID); dismiss() }
-        } message: { Text("Песни останутся в каталоге и избранном.") }
+        .confirmationDialog("Delete playlist?", isPresented: $confirmingDelete) {
+            Button("Delete", role: .destructive) { model.deletePlaylist(playlistID); dismiss() }
+        } message: { Text("Songs will remain in the catalog and your favorites.") }
     }
 }
 
@@ -310,7 +323,8 @@ struct TrackRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Button(action: play) { Artwork(url: track.artworkURL, symbol: "music.note", size: 54) }
-                .buttonStyle(.plain).accessibilityLabel("Слушать \(track.title)")
+                .buttonStyle(.plain).accessibilityLabel("Play \(track.title)")
+                .accessibilityIdentifier("play-track-\(track.id)")
             Button(action: play) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(track.title).font(.subheadline.weight(.semibold)).lineLimit(1).foregroundStyle(Theme.cream)
@@ -320,16 +334,16 @@ struct TrackRow: View {
             Button { model.toggleFavorite(track) } label: {
                 Image(systemName: model.isFavorite(track) ? "heart.fill" : "heart")
                     .foregroundStyle(model.isFavorite(track) ? Theme.accent : Theme.muted)
-            }.accessibilityLabel(model.isFavorite(track) ? "Убрать из избранного" : "Добавить в избранное")
+            }.accessibilityLabel(model.isFavorite(track) ? "Remove from favorites" : "Add to favorites")
             Menu {
-                Button("В плейлист", systemImage: "text.badge.plus") { addPresented = true }
-                Button("Пожаловаться", systemImage: "flag") { reportPresented = true }
-                Button("Скрыть автора", systemImage: "hand.raised", role: .destructive) { model.blockArtist(track.artistID) }
+                Button("Add to playlist", systemImage: "text.badge.plus") { addPresented = true }
+                Button("Report", systemImage: "flag") { reportPresented = true }
+                Button("Hide artist", systemImage: "hand.raised", role: .destructive) { model.blockArtist(track.artistID) }
             } label: { Image(systemName: "ellipsis").frame(width: 28, height: 38).foregroundStyle(Theme.muted) }
-                .accessibilityLabel("Действия с песней")
+                .accessibilityLabel("Song options")
         }
         .padding(11).background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
-        .confirmationDialog("Добавить в плейлист", isPresented: $addPresented) {
+        .confirmationDialog("Add to playlist", isPresented: $addPresented) {
             ForEach(model.library?.playlists ?? []) { playlist in
                 Button(playlist.name) { model.add(track, to: playlist.id) }
             }
@@ -349,31 +363,31 @@ struct ReportView: View {
         NavigationStack {
             Form {
                 if model.usesPublicCatalog {
-                    Section("Музыка из открытого каталога") {
-                        Text("Жалобы на запись рассматривает площадка, на которой она опубликована. Откройте источник, чтобы отправить обращение.")
+                    Section("Public catalog music") {
+                        Text("The platform hosting this recording handles reports. Open the source to report a concern.")
                         if let track, let url = URL(string: "https://near.fm/song/\(track.id)") {
-                            Link("Открыть страницу записи", destination: url)
+                            Link("Open recording page", destination: url)
                         } else {
-                            Link("Открыть каталог источника", destination: URL(string: "https://near.fm")!)
+                            Link("Open source catalog", destination: URL(string: "https://near.fm")!)
                         }
-                        Button("Скрыть автора на этом iPhone") {
+                        Button("Hide this artist") {
                             if let id = artistID ?? track?.artistID { model.blockArtist(id) }
                             dismiss()
                         }
                     }
                 } else {
-                    Section("Причина жалобы") {
-                        TextField("Опишите проблему", text: $reason, axis: .vertical).lineLimit(3...6)
+                    Section("Reason for report") {
+                        TextField("Describe the issue", text: $reason, axis: .vertical).lineLimit(3...6)
                     }
-                    Section { Text("Жалоба попадёт на рассмотрение после подтверждения сервером.").foregroundStyle(Theme.muted) }
+                    Section { Text("Your report will be submitted for review after the server confirms receipt.").foregroundStyle(Theme.muted) }
                 }
             }
-            .navigationTitle("Пожаловаться").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Report").navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Закрыть") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     if !model.usesPublicCatalog {
-                    Button("Отправить") {
+                    Button("Send") {
                         sending = true
                         Task { await model.report(track: track, artistID: artistID, reason: reason.trimmingCharacters(in: .whitespacesAndNewlines)); sending = false; if model.noticeText != nil { dismiss() } }
                     }.disabled(reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sending)
@@ -408,7 +422,7 @@ struct ArtistCard: View {
         VStack(alignment: .leading, spacing: 10) {
             Artwork(url: artist.artworkURL, symbol: "person.fill", size: 132)
             Text(artist.name).font(.subheadline.weight(.bold)).lineLimit(1).foregroundStyle(Theme.cream)
-            Text(artist.trackCount >= 0 ? "\(artist.trackCount) песен" : "Слушать автора").font(.caption).foregroundStyle(Theme.muted)
+            Text(artist.trackCount >= 0 ? "\(artist.trackCount) songs" : "Play artist").font(.caption).foregroundStyle(Theme.muted)
         }.frame(width: 132, alignment: .leading)
     }
 }

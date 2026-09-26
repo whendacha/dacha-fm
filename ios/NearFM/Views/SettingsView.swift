@@ -9,17 +9,17 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 7) {
-                    Text("Настройки").font(.system(size: 34, weight: .bold, design: .rounded)).foregroundStyle(Theme.cream)
-                    Text("Аккаунт и ваша музыка").foregroundStyle(Theme.muted)
+                    Text("Settings").font(.system(size: 34, weight: .bold, design: .rounded)).foregroundStyle(Theme.cream)
+                    Text("Your account and music").foregroundStyle(Theme.muted)
                 }
                 VStack(alignment: .leading, spacing: 15) {
                     HStack(spacing: 13) {
                         Image(systemName: model.isSignedIn ? "person.crop.circle.fill" : "iphone.gen3")
                             .font(.title).foregroundStyle(Theme.accent)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(model.isSignedIn ? "Аккаунт Dacha FM" : "Гость")
+                            Text(model.isSignedIn ? "Dacha FM account" : "Guest")
                                 .font(.headline).foregroundStyle(Theme.cream)
-                            Text(model.isSignedIn ? (model.accountLabel) : "Библиотека хранится на iPhone")
+                            Text(model.isSignedIn ? (model.accountLabel) : "Library saved on this iPhone")
                                 .font(.caption).foregroundStyle(Theme.muted).lineLimit(1)
                         }
                     }
@@ -32,113 +32,113 @@ struct SettingsView: View {
 
                 if !model.isSignedIn {
                     VStack(alignment: .leading, spacing: 13) {
-                        SectionTitle(title: model.cloudConfigured ? "Синхронизация" : "Ваш аккаунт", subtitle: model.cloudConfigured ? "Войдите с тем же кошельком на других устройствах — избранное и плейлисты появятся там." : "Войдите через кошелёк. Библиотека хранится на этом iPhone.")
+                        SectionTitle(title: model.cloudConfigured ? "Cloud sync" : "Your account", subtitle: model.cloudConfigured ? "Sign in with the same wallet on your other devices to sync favorites and playlists." : "Sign in with your wallet. Your library stays on this iPhone.")
                         if model.canAppleLogin {
                         AppleSignInButton { Task { await model.loginWithApple() } }
                             .frame(height: 52)
                             .disabled(model.isAuthenticating || !model.canAppleLogin)
-                            .accessibilityLabel("Войти через Apple")
+                            .accessibilityLabel("Sign in with Apple")
                         }
                         Button { Task { await model.loginWithMeteor() } } label: {
-                            Label("Войти через Meteor Wallet", systemImage: "sparkles")
+                            Label("Sign in with Meteor Wallet", systemImage: "sparkles")
                                 .font(.headline).frame(maxWidth: .infinity).padding(16)
                                 .background(Theme.accent, in: RoundedRectangle(cornerRadius: 14)).foregroundStyle(.black)
                         }.disabled(model.isAuthenticating || !model.canMeteorLogin)
-                        if model.isAuthenticating { ProgressView("Выполняется вход…").padding(.top, 4) }
+                        if model.isAuthenticating { ProgressView("Signing in…").padding(.top, 4) }
                         if !model.canMeteorLogin {
-                            Text("Некоторые способы входа временно недоступны.")
+                            Text("Some sign-in options are temporarily unavailable.")
                                 .font(.caption).foregroundStyle(Theme.muted)
                         }
-                        Text("Meteor попросит подписать только подтверждение владения аккаунтом. Приложение не запрашивает ключи и не выполняет перевод.")
+                        Text("Meteor will ask you to sign a message to verify your account. Dacha FM never requests private keys or transfers funds.")
                             .font(.caption).foregroundStyle(Theme.muted)
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 12) {
-                        SectionTitle(title: "Библиотека", subtitle: model.account?.isCloudWallet == true || model.cloudSyncEnabled ? "Состояние синхронизации" : "Сохранено на этом iPhone для вашего аккаунта")
+                        SectionTitle(title: "Library", subtitle: model.account?.isCloudWallet == true || model.cloudSyncEnabled ? "Sync status" : "Saved on this iPhone for your account")
                         if model.canEnableCloud || model.needsCloudReauthentication {
-                            Button(model.needsCloudReauthentication ? "Войти в облако через Meteor снова" : "Включить синхронизацию через Meteor") {
+                            Button(model.needsCloudReauthentication ? "Sign in to cloud sync again" : "Enable sync with Meteor") {
                                 Task { await model.loginWithMeteor() }
                             }
                             .disabled(model.isAuthenticating || model.isChangingAccount || !model.canMeteorLogin)
-                            Text("Подтвердите тот же кошелёк. Сохранённая на iPhone библиотека останется доступна.")
+                            Text("Confirm the same wallet. Your library saved on this iPhone will remain available.")
                                 .font(.caption).foregroundStyle(Theme.muted)
-                            if model.isAuthenticating { ProgressView("Выполняется вход…") }
+                            if model.isAuthenticating { ProgressView("Signing in…") }
                         }
                         if model.guestMergeAvailable {
                             Button { model.mergeGuestLibrary() } label: {
-                                Label("Объединить гостевую библиотеку", systemImage: "square.stack.3d.up")
+                                Label("Merge guest library", systemImage: "square.stack.3d.up")
                                     .frame(maxWidth: .infinity, alignment: .leading).padding(15)
                                     .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14))
                             }
-                            Text("Гостевые записи останутся на этом iPhone.").font(.caption).foregroundStyle(Theme.muted)
+                            Text("Your guest library will also stay on this iPhone.").font(.caption).foregroundStyle(Theme.muted)
                         }
                         if model.syncState == .conflict {
                             VStack(alignment: .leading, spacing: 10) {
-                                Text("Библиотека изменилась на другом устройстве. Выберите полную версию: удалённые записи и порядок плейлистов сохранятся из выбранной версии.").font(.subheadline)
-                                Button("Использовать облачную версию") { model.resolveConflictUseCloud() }
-                                Button("Использовать версию этого iPhone") { Task { await model.resolveConflictUseDevice() } }
+                                Text("Your library changed on another device. Choose one complete version, including its deletions and playlist order.").font(.subheadline)
+                                Button("Use cloud version") { model.resolveConflictUseCloud() }
+                                Button("Use this iPhone’s version") { Task { await model.resolveConflictUseDevice() } }
                             }.padding(16).background(Theme.elevated, in: RoundedRectangle(cornerRadius: 16))
                         }
                         if model.cloudSyncEnabled && model.syncState != .conflict {
-                            Button(model.syncState == .offline ? "Повторить синхронизацию" : "Синхронизировать сейчас") { Task { await model.refreshLibrary() } }
+                            Button(model.syncState == .offline ? "Retry sync" : "Sync now") { Task { await model.refreshLibrary() } }
                                 .disabled(model.syncState == .syncing || model.isChangingAccount)
                         }
                     }
                     VStack(alignment: .leading, spacing: 12) {
-                        SectionTitle(title: "Аккаунт", subtitle: "Управление входом и данными")
-                        Button("Выйти") { logoutConfirmation = true }
+                        SectionTitle(title: "Account", subtitle: "Manage sign-in and data")
+                        Button("Sign out") { logoutConfirmation = true }
                             .frame(maxWidth: .infinity, alignment: .leading).padding(15)
                             .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14))
                             .disabled(model.isChangingAccount || model.isAuthenticating)
-                        Button("Удалить аккаунт", role: .destructive) { deleteConfirmation = true }
+                        Button("Delete account", role: .destructive) { deleteConfirmation = true }
                             .frame(maxWidth: .infinity, alignment: .leading).padding(15)
                             .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14))
                             .disabled(model.isChangingAccount || model.isAuthenticating)
-                        Text("Удаление стирает профиль Dacha FM и личную библиотеку. Кошелёк Meteor и данные блокчейна остаются у вас.")
+                        Text("Deleting your account removes your Dacha FM profile and personal library. Your Meteor wallet and blockchain data remain yours.")
                             .font(.caption).foregroundStyle(Theme.muted)
                     }
                 }
 
                 if let blocked = model.library?.blockedArtistIDs, !blocked.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
-                        SectionTitle(title: "Скрытые авторы", subtitle: "Их музыка не показывается и не играет")
+                        SectionTitle(title: "Hidden artists", subtitle: "Their music is hidden and will not play")
                         ForEach(blocked, id: \.self) { id in
                             HStack {
                                 Text(id).font(.subheadline).lineLimit(1)
                                 Spacer()
-                                Button("Показать") { model.unblockArtist(id) }.font(.caption.weight(.semibold))
+                                Button("Unhide") { model.unblockArtist(id) }.font(.caption.weight(.semibold))
                             }.padding(14).background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
                         }
                     }
                 }
 
                 VStack(alignment: .leading, spacing: 12) {
-                    SectionTitle(title: "Помощь и документы", subtitle: "Связь и правила")
-                    if let url = model.supportURL { Link(destination: url) { SettingsLink(title: "Поддержка", symbol: "questionmark.circle") } }
-                    else { SettingsLink(title: "Поддержка временно недоступна", symbol: "questionmark.circle").foregroundStyle(Theme.muted) }
-                    if let url = model.privacyURL { Link(destination: url) { SettingsLink(title: "Политика приватности", symbol: "hand.raised") } }
-                    else { SettingsLink(title: "Политика приватности временно недоступна", symbol: "hand.raised").foregroundStyle(Theme.muted) }
+                    SectionTitle(title: "Help and policies", subtitle: "Support and privacy")
+                    if let url = model.supportURL { Link(destination: url) { SettingsLink(title: "Support", symbol: "questionmark.circle") } }
+                    else { SettingsLink(title: "Support is temporarily unavailable", symbol: "questionmark.circle").foregroundStyle(Theme.muted) }
+                    if let url = model.privacyURL { Link(destination: url) { SettingsLink(title: "Privacy policy", symbol: "hand.raised") } }
+                    else { SettingsLink(title: "Privacy policy is temporarily unavailable", symbol: "hand.raised").foregroundStyle(Theme.muted) }
                 }
             }.padding(20)
         }
         .background(Theme.background)
         .navigationBarHidden(true)
-        .confirmationDialog("Выйти из аккаунта?", isPresented: $logoutConfirmation) {
-            Button("Выйти") { Task { await model.logout() } }
-        } message: { Text("Локальная библиотека гостя будет показана после выхода.") }
-        .confirmationDialog("Удалить аккаунт Dacha FM?", isPresented: $deleteConfirmation) {
-            Button("Удалить аккаунт", role: .destructive) { Task { await model.deleteAccount() } }
-        } message: { Text(model.cloudSyncEnabled || model.account?.isCloudWallet == true ? "Профиль и синхронизированная библиотека будут удалены после подтверждения сервером. Если вход истёк, потребуется снова подтвердить кошелёк." : "Профиль и его библиотека будут удалены с этого iPhone. Кошелёк останется у вас.") }
+        .confirmationDialog("Sign out?", isPresented: $logoutConfirmation) {
+            Button("Sign out") { Task { await model.logout() } }
+        } message: { Text("Your local guest library will appear after you sign out.") }
+        .confirmationDialog("Delete your Dacha FM account?", isPresented: $deleteConfirmation) {
+            Button("Delete account", role: .destructive) { Task { await model.deleteAccount() } }
+        } message: { Text(model.cloudSyncEnabled || model.account?.isCloudWallet == true ? "Your profile and synced library will be removed once the server confirms deletion. If your session has expired, you will need to confirm your wallet again." : "Your profile and its library will be removed from this iPhone. Your wallet will remain yours.") }
     }
 
     private var syncLabel: String {
         switch model.syncState {
-        case .local: "Только на устройстве"
-        case .syncing: "Синхронизация…"
-        case .synced: "Синхронизировано"
-        case .offline: "Локальные изменения ожидают связи"
-        case .conflict: "Требуется выбор версии"
-        case .reauthenticationRequired: "Войдите снова — изменения сохранены на iPhone"
+        case .local: "On this device only"
+        case .syncing: "Syncing…"
+        case .synced: "Up to date"
+        case .offline: "Changes saved locally, waiting to sync"
+        case .conflict: "Choose a library version"
+        case .reauthenticationRequired: "Sign in again. Changes are saved on this iPhone."
         }
     }
     private var syncColor: Color {
@@ -151,7 +151,7 @@ struct SettingsView: View {
 }
 
 private extension AppModel {
-    var accountLabel: String { account?.isLocalWallet == true || account?.isCloudWallet == true ? (account?.userID ?? "") : "Вход выполнен" }
+    var accountLabel: String { account?.isLocalWallet == true || account?.isCloudWallet == true ? (account?.userID ?? "") : "Signed in" }
 }
 
 struct SettingsLink: View {

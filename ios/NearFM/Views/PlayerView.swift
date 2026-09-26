@@ -8,7 +8,7 @@ struct MiniPlayer: View {
         if let track = model.player.current {
             HStack(spacing: 12) {
                 Button { model.playerPresented = true } label: { Artwork(url: track.artworkURL, symbol: "music.note", size: 45) }
-                    .buttonStyle(.plain).accessibilityIdentifier("open-player")
+                    .buttonStyle(.plain).accessibilityLabel("Open player").accessibilityIdentifier("open-player")
                 Button { model.playerPresented = true } label: {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(track.title).font(.subheadline.weight(.semibold)).lineLimit(1).foregroundStyle(Theme.cream)
@@ -18,10 +18,10 @@ struct MiniPlayer: View {
                 Button { model.player.toggle() } label: {
                     Image(systemName: model.player.isPlaying ? "pause.fill" : "play.fill")
                         .font(.title3).frame(width: 36, height: 40)
-                }.accessibilityLabel(model.player.isPlaying ? "Пауза" : "Воспроизвести")
+                }.accessibilityLabel(model.player.isPlaying ? "Pause" : "Play")
                 Button { model.player.next() } label: {
                     Image(systemName: "forward.end.fill").frame(width: 30, height: 40)
-                }.accessibilityLabel("Следующая песня")
+                }.accessibilityLabel("Next song")
             }
             .padding(.horizontal, 13).padding(.vertical, 8)
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18))
@@ -33,6 +33,8 @@ struct MiniPlayer: View {
                 }.clipShape(RoundedRectangle(cornerRadius: 18)).allowsHitTesting(false)
             }
             .padding(.horizontal, 10).padding(.bottom, 2)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("mini-player")
         }
     }
 }
@@ -49,15 +51,15 @@ struct PlayerView: View {
             VStack(spacing: 0) {
                 HStack {
                     Button { dismiss() } label: { Image(systemName: "chevron.down").font(.title3.weight(.bold)).frame(width: 44, height: 44) }
-                        .accessibilityLabel("Свернуть плеер")
+                        .accessibilityLabel("Minimize player")
                     Spacer()
                     VStack(spacing: 3) {
-                        Text("СЕЙЧАС ИГРАЕТ").font(.caption2.weight(.bold)).tracking(2)
-                        Text(model.player.artistID == nil ? "Плейлист" : "Только этот автор")
+                        Text("NOW PLAYING").font(.caption2.weight(.bold)).tracking(2)
+                        Text(model.player.artistID == nil ? "Playlist" : "This artist only")
                             .font(.caption).foregroundStyle(Theme.muted)
                     }
                     Spacer()
-                    AirPlayButton().frame(width: 44, height: 44).accessibilityLabel("Выбрать аудиоустройство")
+                    AirPlayButton().frame(width: 44, height: 44).accessibilityLabel("Choose audio output")
                 }
                 Spacer(minLength: 20)
                 if let track = model.player.current {
@@ -76,7 +78,7 @@ struct PlayerView: View {
                         Button { model.toggleFavorite(track) } label: {
                             Image(systemName: model.isFavorite(track) ? "heart.fill" : "heart")
                                 .font(.title2).foregroundStyle(Theme.accent)
-                        }.accessibilityLabel(model.isFavorite(track) ? "Убрать из избранного" : "Добавить в избранное")
+                        }.accessibilityLabel(model.isFavorite(track) ? "Remove from favorites" : "Add to favorites")
                     }
                     VStack(spacing: 4) {
                         Slider(value: $seekValue, in: 0...max(1, model.player.duration)) { editing in
@@ -93,29 +95,29 @@ struct PlayerView: View {
                     }.padding(.top, 26)
                     HStack {
                         Button { model.player.shuffle() } label: { Image(systemName: "shuffle").font(.title3) }
-                            .accessibilityLabel("Перемешать очередь")
+                            .accessibilityLabel("Shuffle queue")
                         Spacer()
                         Button { model.player.previous() } label: { Image(systemName: "backward.end.fill").font(.title2) }
-                            .accessibilityLabel("Предыдущая песня")
+                            .accessibilityLabel("Previous song")
                         Spacer()
                         Button { model.player.toggle() } label: {
                             Image(systemName: model.player.isPlaying ? "pause.fill" : "play.fill")
                                 .font(.title2).foregroundStyle(.black)
                                 .frame(width: 70, height: 70).background(Theme.accent, in: Circle())
-                        }.accessibilityLabel(model.player.isPlaying ? "Пауза" : "Воспроизвести")
+                        }.accessibilityLabel(model.player.isPlaying ? "Pause" : "Play")
                         Spacer()
                         Button { model.player.next() } label: { Image(systemName: "forward.end.fill").font(.title2) }
-                            .accessibilityLabel("Следующая песня")
+                            .accessibilityLabel("Next song")
                         Spacer()
                         Button { model.player.repeatAll.toggle() } label: {
                             Image(systemName: "repeat").font(.title3).foregroundStyle(model.player.repeatAll ? Theme.accent : Theme.muted)
-                        }.accessibilityLabel(model.player.repeatAll ? "Выключить повтор" : "Повторять очередь")
+                        }.accessibilityLabel(model.player.repeatAll ? "Turn repeat off" : "Repeat queue")
                     }.padding(.top, 27)
                     if let error = model.player.errorMessage {
                         Text(error).font(.caption).foregroundStyle(.red).multilineTextAlignment(.center).padding(.top, 16)
                     }
                 } else {
-                    EmptyCard(icon: "music.note", title: "Очередь пуста", detail: "Выберите песню или автора.")
+                    EmptyCard(icon: "music.note", title: "Queue is empty", detail: "Choose a song or artist.")
                 }
                 Spacer(minLength: 20)
             }
