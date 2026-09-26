@@ -68,7 +68,7 @@ for configuration in ('Debug', 'Release'):
         'PRODUCT_NAME': 'DachaFM', 'PRODUCT_BUNDLE_IDENTIFIER': 'com.whendacha.dachafm',
         'INFOPLIST_FILE': 'NearFM/Info.plist', 'GENERATE_INFOPLIST_FILE': 'NO',
         'CODE_SIGN_ENTITLEMENTS': 'NearFM/NearFM.entitlements', 'CODE_SIGN_STYLE': 'Automatic',
-        'CURRENT_PROJECT_VERSION': '3', 'MARKETING_VERSION': '1.0.0',
+        'CURRENT_PROJECT_VERSION': '4', 'MARKETING_VERSION': '1.0.0',
         'ASSETCATALOG_COMPILER_APPICON_NAME': 'AppIcon', 'ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME': 'AccentColor',
         'TARGETED_DEVICE_FAMILY': '1', 'SUPPORTED_PLATFORMS': 'iphoneos iphonesimulator',
         'SUPPORTS_MACCATALYST': 'NO', 'SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD': 'NO',
@@ -95,7 +95,7 @@ dependency = obj('uitest-dependency', f'{{isa = PBXTargetDependency; target = {t
 test_target = obj('uitest-target', f'{{isa = PBXNativeTarget; buildConfigurationList = {test_config_list}; buildPhases = {array([test_sources])}; buildRules = (); dependencies = {array([dependency])}; name = NearFMUITests; productName = NearFMUITests; productReference = {test_product}; productType = "com.apple.product-type.bundle.ui-testing"; }}')
 objects[main_group] = f'{{isa = PBXGroup; children = {array(refs + [test_file, product_group])}; sourceTree = "<group>"; }}'
 objects[product_group] = f'{{isa = PBXGroup; children = {array([product, test_product])}; name = Products; sourceTree = "<group>"; }}'
-project = obj('project', f'{{isa = PBXProject; attributes = {{BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 2600; TargetAttributes = {{{target} = {{CreatedOnToolsVersion = 26.0; }}; {test_target} = {{CreatedOnToolsVersion = 26.0; TestTargetID = {target}; }}; }}; }}; buildConfigurationList = {project_config_list}; compatibilityVersion = "Xcode 14.0"; developmentRegion = ru; hasScannedForEncodings = 0; knownRegions = (ru, en, Base); mainGroup = {main_group}; packageReferences = {array([package])}; productRefGroup = {product_group}; projectDirPath = ""; projectRoot = ""; targets = {array([target, test_target])}; }}')
+project = obj('project', f'{{isa = PBXProject; attributes = {{BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 2600; TargetAttributes = {{{target} = {{CreatedOnToolsVersion = 26.0; }}; {test_target} = {{CreatedOnToolsVersion = 26.0; TestTargetID = {target}; }}; }}; }}; buildConfigurationList = {project_config_list}; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = {main_group}; packageReferences = {array([package])}; productRefGroup = {product_group}; projectDirPath = ""; projectRoot = ""; targets = {array([target, test_target])}; }}')
 directory = ROOT / 'NearFM.xcodeproj'
 directory.mkdir(exist_ok=True)
 (directory / 'project.pbxproj').write_text('// !$*UTF8*$!\n{archiveVersion = 1; classes = {}; objectVersion = 56; objects = {\n' + '\n'.join(f'{key} = {value};' for key, value in objects.items()) + f'\n}}; rootObject = {project}; }}\n')
