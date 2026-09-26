@@ -2,11 +2,21 @@
 
 ## App Store draft: prepared, not submitted
 
-Build **1.0.0 (4)** is selected for the English App Store draft. Description, support links, review contact details and three authentic iPhone screenshots are saved. Public privacy/support pages now disclose verified hosting logs and provide the authorized support email. Free pricing is configured. The six known privacy categories are configured but remain unpublished because upstream search-request retention is not established.
+Build **1.0.0 (5)** is selected for the English App Store draft, and its description/review notes include individual-song hiding. Description, support links, review contact details and three authentic iPhone screenshots are saved. Public privacy/support pages now disclose verified hosting logs and provide the authorized support email. Free pricing is configured. The six known privacy categories are configured but remain unpublished because upstream search-request retention is not established.
 
 Apple validation still requires a truthful Content Rights declaration, completed age-rating answers and published privacy information. The documented public API supports programmatic access, but no blanket permission for independent distribution of the catalog/music/artwork was found. The shipped native IPA is separately written Swift code; missing upstream source licensing and catalog authorization are distinct issues. Complete optional Meteor sign-in/sync/reviewer access and moderation evidence remain review checks. **No App Review submission or approval has occurred.**
 
 [Detailed readiness and evidence](app-review-readiness.md) · [Privacy audit](app-privacy-audit.md) · [Permission request draft, not sent](upstream-permission-request.md)
+
+## Build 5: processed and available in internal TestFlight
+
+Build **1.0.0 (5)** adds **Hide song** to song/player menus and **Settings → Hidden songs → Unhide**. Hiding affects one song, preserves its favorite and playlist membership for restoration, and leaves the artist's other songs available. Hidden songs persist locally and synchronize with the optional private cloud library. The deployed cloud update preserves hidden songs on older clients' writes; only build 5+ applies the hiding behavior.
+
+Validation passed: **48 core tests, 7 iOS UI tests, 15 Edge tests, 15 PostgreSQL tests and 14 live cloud checks**. Signed archive/export, IPA integrity, English localization and exclusion of test fixtures were verified. Apple accepted the upload at **13:34:10 MSK (10:34:10 UTC) on 26 September 2026** and completed processing. Build `4f1e8ed9-929f-4baf-8994-6b5560b22d7f` is assigned to the existing internal TestFlight group `91124dc5-3999-4c77-b0ec-84da99f8b3dd`, with English testing instructions saved.
+
+IPA SHA-256: `a176e13bdfeb9b42fe3ca1ba3d5ab27de8cd02eecf16123cb8f4d613490b1bdf`. Local receipt: `ios/build/dachafm-build5-evidence.json`. Public English help/privacy pages match source. Real wallet approval and physical two-device acceptance remain unverified; public App Review requirements are separate and unchanged.
+
+[Build 5 behavior and evidence](build-5-hidden-songs.md) · [Cloud deployment](build-5-cloud-verification.md)
 
 ## Build 4: processed and available in internal TestFlight
 
