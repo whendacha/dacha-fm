@@ -17,7 +17,11 @@ The API must verify NEP-413 signatures, PKCE, and account FullAccess ownership b
 
 Both nonce and PKCE challenge are canonical 43-character base64url encodings of 32 bytes. The Edge API supplies all randomness. Challenge lifetime is five minutes. Successful redemption atomically consumes the challenge, preserves any existing library, and creates a session valid for 30 days. Only one concurrent redemption can succeed.
 
-A snapshot has exactly `version`, `favorites`, `playlists`, and `blocked_artist_ids`. Version is a nonnegative integer; the remaining values are arrays. SQL rejects extra/missing top-level fields and snapshots exceeding 1 MiB of JSON text. The API must enforce deeper field/count/URL limits. PUT compares the supplied version with the stored version while holding the account lock. It rejects conflicts instead of silently overwriting data.
+A returned snapshot has `version`, `favorites`, `playlists`, `blocked_artist_ids`, and `hidden_tracks`. GET supplies `hidden_tracks: []` for older stored snapshots. Version is a nonnegative integer; the remaining values are arrays. PUT requires the four original fields and accepts optional `hidden_tracks` for backward compatibility. SQL rejects other top-level fields and snapshots exceeding 1 MiB of JSON text. The API enforces deeper field/count/URL limits.
+
+`hidden_tracks` contains at most 2,000 full track objects, validated like favorites and deduplicated by track ID by the Edge API. Hiding a song preserves its favorite and playlist memberships so unhiding is reversible; hidden songs are not removed from those arrays on the server. Existing blocked-artist filtering of favorites and playlist tracks is unchanged. Hidden-song metadata itself is retained even when its author is blocked.
+
+New clients send `hidden_tracks`, including `[]` to explicitly clear it. A legacy client's omission preserves the current stored hidden tracks. SQL merges that field only while holding the account lock, after reading the stored version and checking compare-and-swap. Both the input and merged snapshot must fit the 1 MiB limit. A conflict or oversized merge fails atomically instead of overwriting newer preferences. The additive migration keeps older stored snapshots valid without rewriting them; newly created libraries include the empty field by default.
 
 Error SQLSTATEs are `PT401` for invalid, expired, revoked, or missing authorization; `PT409` for version/replay-identifier conflicts; and `PT400` for invalid input shape. The Edge API should map these to their matching HTTP status. Logout and account deletion require a still-valid token; after a successful deletion, retries return `PT401`. The client can clear local credentials for either success or `401`.
 
@@ -27,7 +31,7 @@ The rate RPC uses one global window row: 120 allowed calls per 60-second window.
 
 ## Local verification
 
-Use a disposable local PostgreSQL database named `dacha_cloud_test` (or `dacha_cloud_test_<suffix>`). Create `anon`, `authenticated`, and `service_role` roles and apply the migration as its database owner. For stronger policy verification, create the local `service_role` with `NOBYPASSRLS`.
+Use a disposable local PostgreSQL database named `dacha_cloud_test` (or `dacha_cloud_test_<suffix>`). Create `anon`, `authenticated`, and `service_role` roles and apply both migrations in filename order as its database owner. For stronger policy verification, create the local `service_role` with `NOBYPASSRLS`.
 
 ```sh
 cd supabase/tests
@@ -35,6 +39,6 @@ pnpm install --frozen-lockfile
 DACHA_CLOUD_TEST_URL=postgresql://LOCAL_USER:LOCAL_PASSWORD@127.0.0.1:5432/dacha_cloud_test pnpm test
 ```
 
-The test runner refuses remote hosts and unrelated database names. It verifies forced RLS, RPC/table access denial for client roles, nonce shape, one-time concurrent redemption, private libraries, invalid snapshots, concurrent compare-and-swap, both save/delete orderings, logout/expiry, rate denial/reset, and bounded cleanup. It creates only namespaced fixture accounts and removes them afterward. It intentionally resets the singleton rate row, so run it only against a disposable database.
+The test runner refuses remote hosts and unrelated database names. Its 15 tests verify forced RLS, RPC/table access denial for client roles, nonce shape, one-time concurrent redemption, private libraries, invalid snapshots, concurrent compare-and-swap, both save/delete orderings, logout/expiry, rate denial/reset, and bounded cleanup. Hidden-song regressions cover legacy reads, explicit clear, retained memberships, cross-session persistence, isolation, stale versions, an observed account-lock wait, schema/count limits, and the merged-size limit. It creates only namespaced fixture accounts and removes them afterward. It intentionally resets the singleton rate row, so run it only against a disposable database.
 
-Migration filename was generated with Supabase CLI `2.118.0` using `supabase migration new dacha_cloud_library`. Reference: [Database functions](https://supabase.com/docs/guides/database/functions), [Data API security](https://supabase.com/docs/guides/api/securing-your-api). The current September 2026 changelog has no breaking change affecting this migration's plain tables/functions; it uses no optional extension or legacy cipher.
+Migration filenames were generated with Supabase CLI `2.118.0` using `supabase migration new dacha_cloud_library` and `supabase migration new dacha_cloud_hidden_tracks`. Deploy the additive hidden-track migration before the updated Edge function. Reference: [Database functions](https://supabase.com/docs/guides/database/functions), [Data API security](https://supabase.com/docs/guides/api/securing-your-api). The current September 2026 changelog has no breaking change affecting these plain tables/functions; they use no optional extension or legacy cipher.
