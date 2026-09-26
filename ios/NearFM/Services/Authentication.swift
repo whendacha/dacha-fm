@@ -9,10 +9,10 @@ enum AuthenticationError: LocalizedError {
     case cancelled, missingCredential, invalidCallback, unconfiguredBridge, insecureBridge
     var errorDescription: String? {
         switch self {
-        case .cancelled: "Вход отменён."
-        case .missingCredential: "Apple не вернула данные для входа. Попробуйте ещё раз."
-        case .invalidCallback: "Ответ входа не прошёл проверку. Попробуйте ещё раз."
-        case .unconfiguredBridge, .insecureBridge: "Вход через Meteor временно недоступен. Попробуйте позже."
+        case .cancelled: "Sign-in cancelled."
+        case .missingCredential: "Apple did not return sign-in credentials. Please try again."
+        case .invalidCallback: "The sign-in response could not be verified. Please try again."
+        case .unconfiguredBridge, .insecureBridge: "Meteor sign-in is temporarily unavailable. Please try again later."
         }
     }
 }

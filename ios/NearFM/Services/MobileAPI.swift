@@ -40,12 +40,12 @@ enum MobileAPIError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .unconfigured, .insecureURL: "Сервис временно недоступен. Попробуйте позже."
-        case .invalidResponse: "Сервер вернул некорректный ответ."
-        case .unauthorized: "Срок действия входа истёк. Войдите снова."
-        case .conflict: "Библиотека изменилась на другом устройстве. Выберите, как разрешить конфликт."
+        case .unconfigured, .insecureURL: "The service is temporarily unavailable. Please try again later."
+        case .invalidResponse: "The server returned an invalid response."
+        case .unauthorized: "Your session has expired. Please sign in again."
+        case .conflict: "Your library changed on another device. Choose which version to keep."
         case .unavailable(let message): message
-        case .server(let code, _): "Сервис временно недоступен (\(code)). Попробуйте позже."
+        case .server(let code, _): "The service is temporarily unavailable (\(code)). Please try again later."
         }
     }
 }
@@ -111,7 +111,7 @@ struct MobileAPI {
         if response.statusCode == 401 { throw MobileAPIError.unauthorized }
         if response.statusCode == 409 { throw MobileAPIError.conflict }
         guard (200..<300).contains(response.statusCode) else {
-            let message = String(data: data, encoding: .utf8).map { String($0.prefix(220)) } ?? "Неизвестная ошибка"
+            let message = String(data: data, encoding: .utf8).map { String($0.prefix(220)) } ?? "Unknown error"
             throw MobileAPIError.server(response.statusCode, message)
         }
         if data.isEmpty, let empty = EmptyResponse() as? Response { return empty }
