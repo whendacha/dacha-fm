@@ -44,3 +44,6 @@ xcuserdata/
 ios/Config/Local.xcconfig
 ios/build/
 .superpowers/
+
+# Supabase CLI local metadata
+supabase/.temp/
