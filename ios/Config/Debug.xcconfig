@@ -1,6 +1,6 @@
 // Local.xcconfig is git-ignored. Configure the owned mobile backend there.
 MOBILE_API_BASE_URL =
-METEOR_BRIDGE_URL =
-PRIVACY_POLICY_URL =
-SUPPORT_URL =
+METEOR_BRIDGE_URL = https:/$()/whendacha.github.io/dacha-fm
+PRIVACY_POLICY_URL = https:/$()/whendacha.github.io/dacha-fm/privacy.html
+SUPPORT_URL = https:/$()/whendacha.github.io/dacha-fm/support.html
 #include? "Local.xcconfig"
