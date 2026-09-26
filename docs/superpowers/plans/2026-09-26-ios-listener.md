@@ -43,7 +43,7 @@ Base path `/api/mobile/v1`. JSON uses snake_case. Dates use ISO8601; library ver
 - `POST /auth/logout`; `DELETE /account` authenticated.
 - `GET /config` -> `{meteor_enabled:Bool,apple_enabled:Bool,privacy_url:String?,support_url:String?}`. Unconfigured integrations fail explicitly rather than faking success.
 
-Meteor browser bridge URL `/mobile/auth?code_challenge=...&state=...`; fixed callback `nearfm://auth/callback?code=...&state=...`. App validates state and exchanges code using verifier. Bridge does not send bearer session in URL. Own HTTPS deployment required. No claimed native-app deep-link support from Meteor until proven.
+Meteor browser bridge URL `/mobile/auth?code_challenge=...&state=...`; fixed callback `dachafm://auth/callback?code=...&state=...`. App validates state and exchanges code using verifier. Bridge does not send bearer session in URL. Own HTTPS deployment required. No claimed native-app deep-link support from Meteor until proven.
 
 ## Task 1 — Core library and behavioral tests
 
