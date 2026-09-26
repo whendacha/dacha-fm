@@ -146,6 +146,24 @@ final class AudioPlayer {
         persist()
     }
 
+    func hideTracks(_ ids: Set<String>) {
+        guard queue.tracks.contains(where: { ids.contains($0.id) }) else { return }
+        let removedCurrent = current.map { ids.contains($0.id) } ?? false
+        let shouldAutoplay = isPlaying || player.timeControlStatus == .waitingToPlayAtSpecifiedRate || advanceGate.pendingID != nil
+        // Removing another queued song must not cancel an in-flight Next request.
+        if removedCurrent {
+            advanceGate.invalidate()
+            pendingFailureSkip = false
+        }
+        queue.removeTracks(ids)
+        if queue.tracks.isEmpty {
+            loadsMoreAuthorTracks = false
+            authorPaginationExhausted = true
+        }
+        if removedCurrent { loadCurrent(autoplay: shouldAutoplay) }
+        persist()
+    }
+
     func clear() {
         player.pause()
         player.replaceCurrentItem(with: nil)
